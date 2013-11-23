@@ -1,4 +1,5 @@
 /* Code adapted from http://en.wikipedia.org/wiki/Circular_buffer
+ * Spin lock code taken from http://locklessinc.com
  * Circular buffer example, keeps one slot open 
  */
 
@@ -7,20 +8,52 @@
 #include <pthread.h>
 #include <sys/time.h>
 #define TIMING
-#define LOCKED
-//#define LOCKLESS
+//#define LOCKED
+#define LOCKLESS
+#define barrier() asm volatile("": : :"memory")
+#define cpu_relax() asm volatile("pause\n": : :"memory")
+#define EBUSY 1
 
+#ifdef LOCKLESS
+static inline unsigned xchg_32(void *ptr, unsigned x)
+{
+	__asm__ __volatile__("xchgl %0,%1"
+			:"=r" ((unsigned) x)
+			:"m" (*(volatile unsigned *)ptr), "0" (x)
+			:"memory");
+
+	return x;
+}
+typedef unsigned spinlock;
+spinlock spinLock;
+static void spin_lock(spinlock *lock)
+{
+	while (1)
+	{
+		if (!xchg_32(lock, EBUSY)) return;
+
+		while (*lock) cpu_relax();
+	}
+}
+
+static void spin_unlock(spinlock *lock)
+{
+	barrier();
+	*lock = 0;
+}
+#endif
 #ifdef TIMING
 struct timeval start_time;
 struct timeval stop_time;
 long long total_time = 0;
+long long tstart = 0,  tstop = 0;
 #endif
 
 pthread_mutex_t bufferLock = PTHREAD_MUTEX_INITIALIZER;
-const long long MAX_ITERATIONS = 40;
-const int NUM_THREADS = 4;
+const int NUM_THREADS = 8;
 const int sizeOfBuffer = 10;
-long long iterations = 0;
+const int EXECUTION_TIME = 1;
+volatile long long iterations = 0;
 
 /* Opaque buffer element type.  This would be defined by the application. */
 typedef struct { int value; } ElemType;
@@ -59,7 +92,7 @@ int cbIsEmpty(CircularBuffer *cb) {
 /* Write an element, overwriting oldest element if buffer is full. App can
    choose to avoid the overwrite by checking cbIsFull(). */
 void *cbWrite(void * threadid) {
-	while(iterations < MAX_ITERATIONS)
+	while(1)
 	{
 #ifdef LOCKED		
 		pthread_mutex_lock(&bufferLock);
@@ -72,12 +105,26 @@ void *cbWrite(void * threadid) {
 		iterations++;
 		pthread_mutex_unlock(&bufferLock);
 #endif	
+
+#ifdef LOCKLESS
+		spin_lock(&spinLock);
+		printf("Value: %d placed in index: %d\n", count.value + 1, cb.end);
+		count.value++;
+		cb.elems[cb.end] = count;
+		cb.end = (cb.end + 1) % cb.size;
+		if (cb.end == cb.start)
+			cb.start = (cb.start + 1) % cb.size; /* full, overwrite */
+		iterations++;
+		spin_unlock(&spinLock);
+#endif
+		gettimeofday(&stop_time, NULL);
+		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
 }
 
 /* Read oldest element. App must ensure !cbIsEmpty() first. */
 void *cbRead(void * threadid) {
-	while(iterations < MAX_ITERATIONS)
+	while(1)
 	{
 #ifdef LOCKED
 		pthread_mutex_lock(&bufferLock);
@@ -86,6 +133,16 @@ void *cbRead(void * threadid) {
 		cb.start = (cb.start + 1) % cb.size;
 		pthread_mutex_unlock(&bufferLock);
 #endif
+
+#ifdef LOCKLESS
+		spin_lock(&spinLock);
+		tmp = cb.elems[cb.start];
+		printf("Value: %d read from index: %d\n", tmp.value, cb.start);
+		cb.start = (cb.start + 1) % cb.size;
+		spin_unlock(&spinLock);
+#endif
+		gettimeofday(&stop_time, NULL);
+		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
 }
 
@@ -111,7 +168,7 @@ int main(int argc, char **argv)
 #ifdef TIMING
 	gettimeofday(&stop_time, NULL);
 	total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-	printf("Total executing time %lld microseconds with %lld iterations\n", total_time, MAX_ITERATIONS);
+	printf("Total executing time %lld microseconds with %lld iterations per second\n", total_time, iterations/EXECUTION_TIME);
 #endif
 	return 0;
 }
