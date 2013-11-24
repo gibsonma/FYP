@@ -1,1 +1,2 @@
-Must test spsc on my machine and update test data
+
+Collect data on my machine
