@@ -10,6 +10,7 @@
 #define NUM_THREADS 32
 #define SIZE 100
 #define EXECUTION_TIME 1
+#define PAUSE 2
 
 //#define LOCKED
 pthread_mutex_t bufferLock = PTHREAD_MUTEX_INITIALIZER;
@@ -24,6 +25,41 @@ int size = SIZE; //Max number of elements
 int back, front, count = 0; //Index of oldest element / Index to write new element / Number of elements in buffer
 int *buffer; //Buffer of elements
 std::atomic<int> lock (0);
+
+//#define EBUSY 1
+#define cpu_relax() asm volatile("pause\n": : :"memory")
+#define barrier() asm volatile("": : :"memory")
+static inline unsigned xchg_32(void *ptr, unsigned x)
+{
+	__asm__ __volatile__("xchgl %0,%1"
+			:"=r" ((unsigned) x)
+			:"m" (*(volatile unsigned *)ptr), "0" (x)
+			:"memory");
+
+	return x;
+}
+typedef unsigned spinlock;
+spinlock spinLock;
+static void spin_lock(spinlock *lock)
+{
+	while (1)
+	{
+		if (!xchg_32(lock, EBUSY)) return;
+
+		while (*lock) cpu_relax();
+	}
+}
+
+static void spin_unlock(spinlock *lock)
+{
+	barrier();
+	*lock = 0;
+}
+
+static int spin_trylock(spinlock *lock)
+{
+	return xchg_32(lock, EBUSY);
+}
 void* push(void* threadid)
 {
 	while(1)
@@ -31,8 +67,11 @@ void* push(void* threadid)
 #ifdef LOCKED
 		pthread_mutex_lock(&bufferLock);
 #else
-		while(lock.exchange(1));
-//TODO	convert to testandtestandset lock	usleep(3);
+		do{
+			while(lock.load() == 1)usleep(PAUSE);
+		}while(lock.exchange(1));
+		//		while(spin_trylock(&spinLock) == 0);
+		//		spin_lock(&spinLock);
 #endif
 		int item = rand() % 100;
 		iterations++;
@@ -58,6 +97,7 @@ void* push(void* threadid)
 		pthread_mutex_unlock(&bufferLock);
 #else
 		lock = 0;
+		//spin_unlock(&spinLock);
 #endif	
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -71,7 +111,11 @@ void* pop(void* threadid)
 #ifdef LOCKED
 		pthread_mutex_lock(&bufferLock);
 #else
-		while(lock.exchange(1));
+		do{
+			while(lock.load() == 1)usleep(PAUSE);
+		}while(lock.exchange(1));
+		//		while(spin_trylock(&spinLock) == 0);
+		//		spin_lock(&spinLock);
 #endif
 		iterations++;
 		if (front == -1 && back == -1) {
@@ -98,6 +142,7 @@ void* pop(void* threadid)
 		pthread_mutex_unlock(&bufferLock);
 #else
 		lock = 0;
+		//		spin_unlock(&spinLock);
 #endif
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;

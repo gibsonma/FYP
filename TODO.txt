@@ -1,2 +1,4 @@
-
-Collect data on my machine
+Implement Spin lock DONE
+Implement spinlock from locklessinc and compare speeds
+Implement CAS-esque version
+Examine how data is presented in similar papers
