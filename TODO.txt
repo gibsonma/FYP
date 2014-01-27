@@ -1,4 +1,10 @@
 Implement Spin lock DONE
-Implement spinlock from locklessinc and compare speeds
-Implement CAS-esque version
+Implement spinlock from locklessinc and compare speeds IN PROGRESS
+Implement CAS-esque version 
 Examine how data is presented in similar papers
+Do Report
+Go into college and research some papers
+
+
+Changed output to be easier to paste into excel
+Gathered data from stoker 

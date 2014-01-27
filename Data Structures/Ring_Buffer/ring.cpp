@@ -1,4 +1,5 @@
-// Implementation of a ring buffer
+// Implementation of a multithreaded ring buffer with
+// several different modes of operation
 // Author: Mark Gibson
 
 #include <iostream>
@@ -6,27 +7,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#include <cstdatomic>
-#define NUM_THREADS 32
-#define SIZE 100
+#include <atomic>
+#include <unistd.h>
+#define NUM_THREADS 1
+#define MAX_THREAD_VAL 128
+#define SIZE 1000000
 #define EXECUTION_TIME 1
 #define PAUSE 2
 
-//#define LOCKED
+//If windows
+//#include <atomic>
+//#include <unistd.h>
+
+//Modes of Operation - If neither defined then defaults to assembly spinlock
+#define LOCKED //Uses simple mutex blocking
+//#define SPINLOCK //Uses a spinlock implemented with C++ atomics
+
 pthread_mutex_t bufferLock = PTHREAD_MUTEX_INITIALIZER;
 
 using namespace std;
-struct timeval start_time;
-struct timeval stop_time;
-long long total_time = 0;
-long long tstart = 0,  tstop = 0;
+
+struct timeval start_time, stop_time;
+long long total_time = 0, tsart = 0, tstop = 0;
 volatile long long iterations = 0;
 int size = SIZE; //Max number of elements
 int back, front, count = 0; //Index of oldest element / Index to write new element / Number of elements in buffer
 int *buffer; //Buffer of elements
 std::atomic<int> lock (0);
 
-//#define EBUSY 1
+/* Implementation of a spinlock in assembly */
+#define EBUSY 1
 #define cpu_relax() asm volatile("pause\n": : :"memory")
 #define barrier() asm volatile("": : :"memory")
 static inline unsigned xchg_32(void *ptr, unsigned x)
@@ -64,14 +74,15 @@ void* push(void* threadid)
 {
 	while(1)
 	{
-#ifdef LOCKED
-		pthread_mutex_lock(&bufferLock);
-#else
-		do{
+#if defined(LOCKED)
+		pthread_mutex_lock(&bufferLock);	//Blocking Implementation
+#elif defined(SPINLOCK) 
+		do{					//C++ spinlock
 			while(lock.load() == 1)usleep(PAUSE);
 		}while(lock.exchange(1));
+#else		
 		//		while(spin_trylock(&spinLock) == 0);
-		//		spin_lock(&spinLock);
+		spin_lock(&spinLock);			//Assembly spinlock
 #endif
 		int item = rand() % 100;
 		iterations++;
@@ -93,11 +104,12 @@ void* push(void* threadid)
 			buffer[back] = item;
 			count++;
 		}
-#ifdef LOCKED		
+#if defined(LOCKED)		
 		pthread_mutex_unlock(&bufferLock);
-#else
+#elif defined(SPINLOCK)
 		lock = 0;
-		//spin_unlock(&spinLock);
+#else
+		spin_unlock(&spinLock);
 #endif	
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -108,14 +120,15 @@ void* pop(void* threadid)
 {
 	while(1)
 	{
-#ifdef LOCKED
+#if defined(LOCKED)
 		pthread_mutex_lock(&bufferLock);
-#else
+#elif defined(SPINLOCK)
 		do{
 			while(lock.load() == 1)usleep(PAUSE);
 		}while(lock.exchange(1));
+#else
 		//		while(spin_trylock(&spinLock) == 0);
-		//		spin_lock(&spinLock);
+		spin_lock(&spinLock);
 #endif
 		iterations++;
 		if (front == -1 && back == -1) {
@@ -138,11 +151,12 @@ void* pop(void* threadid)
 				count--;
 			}
 		}
-#ifdef LOCKED
+#if defined(LOCKED)
 		pthread_mutex_unlock(&bufferLock);
-#else
+#elif defined(SPINLOCK)
 		lock = 0;
-		//		spin_unlock(&spinLock);
+#else		
+		spin_unlock(&spinLock);
 #endif
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -160,23 +174,27 @@ void printBuffer()
 
 int main()
 {
+	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
 	srand(time(NULL));
 	gettimeofday(&start_time, NULL);
 	int rc, t;
 	buffer = new int[SIZE];
-	pthread_t threads[NUM_THREADS];
-	for(t = 0; t < NUM_THREADS; t++)
+	pthread_t threads[i];
+	for(t = 0; t < i; t++)
 	{
 		if(t % 2 == 0)rc = pthread_create(&threads[t], NULL, push, (void *)t);
 		else rc = pthread_create(&threads[t], NULL, pop, (void *)t);
 	}
-	for(t = 0; t < NUM_THREADS; t++)
+	for(t = 0; t < i; t++)
 	{
 		pthread_join(threads[t], NULL);
 	}
 	gettimeofday(&stop_time, NULL);
 	total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-	printf("Total executing time %lld microseconds with %lld iterations per second and %d threads\n", total_time, iterations/EXECUTION_TIME, NUM_THREADS);
+	printf("%lld ,",iterations/EXECUTION_TIME);
+	//printf("Total executing time %lld microseconds with %lld iterations per second and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
+	iterations = 0;
+	}
 
 	return 0;
 }
