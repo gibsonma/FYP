@@ -6,5 +6,7 @@ Do Report
 Go into college and research some papers
 
 
-Changed output to be easier to paste into excel
-Gathered data from stoker 
+Done this session:
+Gathered data from local machine, netsoc, ducss. Looked at vpn but only have 1 core on that
+Tested assembly spinlock against c++ spinlock. Found difference to be negligible and since c++ lock is not as bulky, I have decided to use that for testing purposes.
+Worked on my report
