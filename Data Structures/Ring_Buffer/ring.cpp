@@ -16,8 +16,8 @@
 #define PAUSE 2
 
 //Modes of Operation - If neither defined then defaults to assembly spinlock
-#define LOCKED //Uses simple mutex blocking
-//#define SPINLOCK //Uses a spinlock implemented with C++ atomics
+//#define LOCKED //Uses simple mutex blocking
+#define SPINLOCK //Uses a spinlock implemented with C++ atomics
 
 pthread_mutex_t bufferLock = PTHREAD_MUTEX_INITIALIZER;
 
