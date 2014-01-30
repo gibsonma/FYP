@@ -14,10 +14,13 @@
 #define SIZE 1000000
 #define EXECUTION_TIME 1
 #define PAUSE 2
+#define MIN_DELAY 1
+#define MAX_DELAY 10
 
 //Modes of Operation - If neither defined then defaults to assembly spinlock
 //#define LOCKED //Uses simple mutex blocking
-#define SPINLOCK //Uses a spinlock implemented with C++ atomics
+//#define SPINLOCK //Uses a spinlock implemented with C++ atomics
+#define CASLOCK
 
 pthread_mutex_t bufferLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -29,8 +32,9 @@ volatile long long iterations = 0;
 int size = SIZE; //Max number of elements
 int back, front, count = 0; //Index of oldest element / Index to write new element / Number of elements in buffer
 int *buffer; //Buffer of elements
+volatile int CASlock = 0;
 std::atomic<int> lock (0);
-
+int notTaken  = 0, taken = 1;
 void* push(void* threadid)
 {
 	while(1)
@@ -41,6 +45,14 @@ void* push(void* threadid)
 		do{					//C++ spinlock
 			while(lock.load() == 1)usleep(PAUSE);
 		}while(lock.exchange(1));
+#elif defined(CASLOCK)
+		int delay = MIN_DELAY;
+		while(true)
+		{
+			if(lock.compare_exchange_strong(notTaken, taken))break;
+			sleep(rand() % delay);
+			if(delay < MAX_DELAY)delay = 2 * delay;
+		}
 #endif
 		int item = rand() % 100;
 		iterations++;
@@ -66,6 +78,8 @@ void* push(void* threadid)
 		pthread_mutex_unlock(&bufferLock);
 #elif defined(SPINLOCK)
 		lock = 0;
+#elif defined(CASLOCK)
+		lock = 0;
 #endif	
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -82,6 +96,14 @@ void* pop(void* threadid)
 		do{
 			while(lock.load() == 1)usleep(PAUSE);
 		}while(lock.exchange(1));
+#elif defined(CASLOCK)
+		int delay = MIN_DELAY;
+		while(true)
+		{
+			if(lock.compare_exchange_strong(notTaken, taken))break;
+			sleep(rand() % delay);
+			if(delay < MAX_DELAY)delay = 2 * delay;
+		}
 #endif
 		iterations++;
 		if (front == -1 && back == -1) {
@@ -107,6 +129,8 @@ void* pop(void* threadid)
 #if defined(LOCKED)
 		pthread_mutex_unlock(&bufferLock);
 #elif defined(SPINLOCK)
+		lock = 0;
+#elif defined(CASLOCK)
 		lock = 0;
 #endif
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
