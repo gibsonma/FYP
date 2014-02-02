@@ -20,7 +20,9 @@
 //Modes of Operation - If neither defined then defaults to assembly spinlock
 //#define LOCKED //Uses simple mutex blocking
 //#define SPINLOCK //Uses a spinlock implemented with C++ atomics
-#define CASLOCK
+//#define CASLOCK
+#define TAS
+//#define TICKET
 
 pthread_mutex_t bufferLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -34,7 +36,9 @@ int back, front, count = 0; //Index of oldest element / Index to write new eleme
 int *buffer; //Buffer of elements
 volatile int CASlock = 0;
 std::atomic<int> lock (0);
-int notTaken  = 0, taken = 1;
+int notTaken  = 0, taken = 1;//For the CAS lock
+volatile long nowServing = 0;//For ticket lock
+std::atomic<long> ticket (0);//For ticket lock
 void* push(void* threadid)
 {
 	while(1)
@@ -53,6 +57,11 @@ void* push(void* threadid)
 			sleep(rand() % delay);
 			if(delay < MAX_DELAY)delay = 2 * delay;
 		}
+#elif defined(TAS)
+		while(lock.exchange(1));
+#elif defined(TICKET)
+		int myTicket = ticket.fetch_add(1);
+		while(myTicket != nowServing)sleep(myTicket - nowServing);
 #endif
 		int item = rand() % 100;
 		iterations++;
@@ -80,6 +89,10 @@ void* push(void* threadid)
 		lock = 0;
 #elif defined(CASLOCK)
 		lock = 0;
+#elif defined(TAS)
+		lock = 0;
+#elif defined(TICKET)
+		nowServing++;
 #endif	
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -104,6 +117,11 @@ void* pop(void* threadid)
 			sleep(rand() % delay);
 			if(delay < MAX_DELAY)delay = 2 * delay;
 		}
+#elif defined(TAS)
+		while(lock.exchange(1));
+#elif defined(TICKET)
+		int myTicket = ticket.fetch_add(1);
+		while(myTicket != nowServing)sleep(myTicket - nowServing);
 #endif
 		iterations++;
 		if (front == -1 && back == -1) {
@@ -132,6 +150,10 @@ void* pop(void* threadid)
 		lock = 0;
 #elif defined(CASLOCK)
 		lock = 0;
+#elif defined(TAS)
+		lock = 0;
+#elif defined(TICKET)
+		nowServing++;
 #endif
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -167,7 +189,7 @@ int main()
 		gettimeofday(&stop_time, NULL);
 		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
 		printf("%lld ,",iterations/EXECUTION_TIME);
-		//printf("Total executing time %lld microseconds with %lld iterations per second and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
+//		printf("Total executing time %lld microseconds with %lld iterations per second and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
 		iterations = 0;
 	}
 

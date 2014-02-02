@@ -1,11 +1,11 @@
-Implement Spin lock DONE
-Implement spinlock from locklessinc and compare speeds IN PROGRESS
-Implement CAS-esque version 
-Examine how data is presented in similar papers
-Do Report
-Go into college and research some papers
-
+Implement TAS DONE
+Implement Ticket lock DONE
+Do graph mockups where size/mode of operation changes
+Research some more data structures
+Get a start on the linked list
+Perf, nice command (help@cs.tcd.ie and cc David Gregg if problems encountered)
+Report
 
 Done this session:
-Tell Jo about di fontaines
+TAS and ticket along with data collection
 
