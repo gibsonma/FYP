@@ -7,7 +7,6 @@ Perf, nice command (help@cs.tcd.ie and cc David Gregg if problems encountered) I
 Report
 
 Done this session:
-Meeting Monday @ 6
 Good way to do graphs would be to do a graph for each size for each lock type,
 so for each size, there will be a graph for each type of lock
 
