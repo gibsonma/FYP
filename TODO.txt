@@ -1,12 +1,20 @@
-Implement TAS DONE
-Implement Ticket lock DONE
-Do graph mockups where size/mode of operation changes DONE
-Research some more data structures
-Get a start on the linked list
-Perf, nice command (help@cs.tcd.ie and cc David Gregg if problems encountered) IN PROGRESS
+Try using the reciprocal (1/iterations/s) in the graphs DONE
+Perf analysis of ring buffer
+lockless sp-sc ring buffer
+Implement assembly ticket lock DONE
+Work on linked list
 Report
+Test ring buffer on cube
+
 
 Done this session:
-Good way to do graphs would be to do a graph for each size for each lock type,
-so for each size, there will be a graph for each type of lock
+Implemented assembly ticket lock
+Gathered data from stoker using perf
+Gathered data from cube
+
+
+Group FYP
+
+Done this session:
+
 
