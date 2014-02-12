@@ -1,16 +1,17 @@
 Try using the reciprocal (1/iterations/s) in the graphs DONE
-Perf analysis of ring buffer
-lockless sp-sc ring buffer
+Perf analysis of ring buffer on cube/stoker DONE
+lockless sp-sc ring buffer DONE
 Implement assembly ticket lock DONE
 Work on linked list
 Report
-Test ring buffer on cube
+Test ring buffer on cube DONE
 
 
 Done this session:
-Implemented assembly ticket lock
-Gathered data from stoker using perf
-Gathered data from cube
+Perfed cube
+lockless buffer
+Tested lockless buffer
+Perfed lockless buffer
 
 
 Group FYP
