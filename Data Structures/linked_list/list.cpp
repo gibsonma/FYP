@@ -10,8 +10,8 @@
 #include <atomic>
 #include <unistd.h>
 #define NUM_THREADS 1
-#define MAX_THREAD_VAL 16
-#define KEY_RANGE 1000
+#define MAX_THREAD_VAL 8
+#define KEY_RANGE 5
 #define EXECUTION_TIME 1
 #define PAUSE 2
 #define MIN_DELAY 1
@@ -99,7 +99,37 @@ void* add(void* threadid)
 
 void* remove(void* threadid)
 {
-
+	pthread_mutex_lock(&listLock);
+	int key = rand() % KEY_RANGE;
+	cout << "Attempting to remove " << key << "\n";
+	Node * tmpNode = head;
+	Node * prevNode;
+	if(tmpNode == NULL)//If linked list is empty then return
+	{
+		cout << "List is empty\n";
+		
+	}
+	else if(tmpNode->key == key)//Else if node is head then reassign head
+	{
+		head = tmpNode->next;
+		delete tmpNode;
+	}
+	else//Else traverse list
+	{
+		while(tmpNode && (tmpNode->key != key))
+		{
+			prevNode = tmpNode;
+			tmpNode = tmpNode->next;
+		}
+		if(tmpNode && (tmpNode->key == key))
+		{
+			cout << "Removing node" << key << "\n";
+			prevNode->next = tmpNode->next;
+		}
+		else cout <<"Node does not exist\n";
+	}
+	printList();
+	pthread_mutex_unlock(&listLock);
 }
 
 

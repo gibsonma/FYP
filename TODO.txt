@@ -8,14 +8,9 @@ Test ring buffer on cube DONE
 
 
 Done this session:
-Perfed cube
-lockless buffer
-Tested lockless buffer
-Perfed lockless buffer
+Tested out CAS in test.cpp and finished implementation of locked linked list
 
 
 Group FYP
 
 Done this session:
-
-
