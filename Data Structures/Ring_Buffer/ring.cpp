@@ -19,9 +19,11 @@
 
 //Modes of Operation - If neither defined then defaults to assembly spinlock
 //#define LOCKED //Uses simple mutex blocking
-//#define SPINLOCK //Uses a spinlock implemented with C++ atomics
+//#define TTAS //Uses a spinlock implemented with C++ atomics
+//#define TTASNP //TTAS with no pause instruction
 //#define CASLOCK
-#define TAS
+//#define TAS
+#define TASWP // TAS with pause instruction 
 //#define TICKET
 
 pthread_mutex_t bufferLock = PTHREAD_MUTEX_INITIALIZER;
@@ -45,9 +47,14 @@ void* push(void* threadid)
 	{
 #if defined(LOCKED)
 		pthread_mutex_lock(&bufferLock);	//Blocking Implementation
-#elif defined(SPINLOCK) 
+#elif defined(TTAS) 
 		do{					//C++ spinlock
-			while(lock.load() == 1)usleep(PAUSE);
+			while(lock.load() == 1)sleep(PAUSE);
+		}while(lock.exchange(1));
+#elif defined(TTASNP)
+		do
+		{
+			while(lock.load() == 1);
 		}while(lock.exchange(1));
 #elif defined(CASLOCK)
 		int delay = MIN_DELAY;
@@ -59,6 +66,8 @@ void* push(void* threadid)
 		}
 #elif defined(TAS)
 		while(lock.exchange(1));
+#elif defined(TASWP)
+		while(lock.exchange(1))sleep(PAUSE);
 #elif defined(TICKET)
 		int myTicket = ticket.fetch_add(1);
 		while(myTicket != nowServing)sleep(myTicket - nowServing);
@@ -85,11 +94,15 @@ void* push(void* threadid)
 		}
 #if defined(LOCKED)		
 		pthread_mutex_unlock(&bufferLock);
-#elif defined(SPINLOCK)
+#elif defined(TTAS)
+		lock = 0;
+#elif defined(TTASNP)
 		lock = 0;
 #elif defined(CASLOCK)
 		lock = 0;
 #elif defined(TAS)
+		lock = 0;
+#elif defined(TASWP)
 		lock = 0;
 #elif defined(TICKET)
 		nowServing++;
@@ -105,9 +118,14 @@ void* pop(void* threadid)
 	{
 #if defined(LOCKED)
 		pthread_mutex_lock(&bufferLock);
-#elif defined(SPINLOCK)
+#elif defined(TTAS)
 		do{
 			while(lock.load() == 1)usleep(PAUSE);
+		}while(lock.exchange(1));
+#elif defined(TTASNP)
+		do
+		{
+			while(lock.load() == 1);
 		}while(lock.exchange(1));
 #elif defined(CASLOCK)
 		int delay = MIN_DELAY;
@@ -119,6 +137,8 @@ void* pop(void* threadid)
 		}
 #elif defined(TAS)
 		while(lock.exchange(1));
+#elif defined(TASWP)
+		while(lock.exchange(1))sleep(PAUSE);
 #elif defined(TICKET)
 		int myTicket = ticket.fetch_add(1);
 		while(myTicket != nowServing)sleep(myTicket - nowServing);
@@ -146,11 +166,15 @@ void* pop(void* threadid)
 		}
 #if defined(LOCKED)
 		pthread_mutex_unlock(&bufferLock);
-#elif defined(SPINLOCK)
+#elif defined(TTAS)
+		lock = 0;
+#elif defined(TTASNP)
 		lock = 0;
 #elif defined(CASLOCK)
 		lock = 0;
 #elif defined(TAS)
+		lock = 0;
+#elif defined(TASWP)
 		lock = 0;
 #elif defined(TICKET)
 		nowServing++;
