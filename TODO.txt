@@ -1,23 +1,17 @@
-Read through paper, investigate library proxy DONE
-Investigate Perf native counters
-TAS with/without PAUSE DONE
-TTAS same DONE
-Locked list + data
-Lockless list + data
+Perf linked list
+Analyse buffer and list data, make graphs
+Send Gregg excel doc thursday morning
+Document lockless list anomaly DONE
 Report
 
 
 
 Done this session:
-Ran locked linked list and gathered data
-Added CAS no delay to modes of operation
-Tested locked versions to detemrine if changing the key size made an impact,
-it doesn't and having a very small key range with a lot of threads causes progress to
-slow to a crawl
+
 
 
 Group FYP
-Test scheduleCalculator
+
 Done this session:
 
 
