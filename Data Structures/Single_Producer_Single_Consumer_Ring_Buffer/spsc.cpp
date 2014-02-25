@@ -6,7 +6,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #define NUM_THREADS 2
-#define SIZE 10000000
+#define SIZE 100000000
 #define EXECUTION_TIME 1
 #define PAUSE 2
 
