@@ -1,10 +1,10 @@
-Perf linked list
+Perf linked list DONE
 Analyse buffer and list data, make graphs
 Send Gregg excel doc thursday morning
 Document lockless list anomaly DONE
 Report
 
-perf data per thread
+
 
 Done this session:
 
