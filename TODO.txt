@@ -1,7 +1,8 @@
-Perf linked list DONE
-Analyse buffer and list data, make graphs
-Send Gregg excel doc thursday morning
-Document lockless list anomaly DONE
+Add in modes using cpu relax/pause instruction instead of sleep and compare
+change key size to powers of two, so 100->128 and so on
+Adapt the linked list to become a MPMC buffer, with an atomic head&tail with threads adding and removing from their respective ends, ignoring duplicates and sorting
+Investigate cache misses using perf
+Look at C++ optimisations http://www.agner.org/optimize/#manuals
 Report
 
 
@@ -13,5 +14,3 @@ Done this session:
 Group FYP
 
 Done this session:
-
-

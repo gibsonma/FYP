@@ -9,6 +9,7 @@
 #include <sys/time.h>
 #include <atomic>
 #include <unistd.h>
+#include "xmmintrin.h"
 #define NUM_THREADS 1
 #define MAX_THREAD_VAL 128
 #define SIZE 1000000
@@ -23,8 +24,13 @@
 //#define TTASNP //TTAS with no pause instruction
 //#define CASLOCK
 //#define TAS
-#define TASWP // TAS with pause instruction 
+//#define TASWP // TAS with pause instruction 
 //#define TICKET
+//#define CASLOCKND
+//#define TTAS_RELAX
+//#define CASLOCK_RELAX
+//#define TICKET_RELAX
+#define TAS_RELAX
 
 pthread_mutex_t bufferLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -71,6 +77,24 @@ void* push(void* threadid)
 #elif defined(TICKET)
 		int myTicket = ticket.fetch_add(1);
 		while(myTicket != nowServing)sleep(myTicket - nowServing);
+#elif defined(TTAS_RELAX)
+		do{
+			while(lock.load() == 1)_mm_pause();
+		}while(lock.exchange(1));
+#elif defined(CASLOCKND)
+		while(true){
+			if(lock.compare_exchange_strong(notTaken, taken))break;
+		}
+#elif defined(CASLOCK_RELAX)
+		while(true){
+			if(lock.compare_exchange_strong(notTaken, taken))break;
+			_mm_pause();
+		}
+#elif defined(TAS_RELAX)
+		while(lock.exchange(1))_mm_pause();
+#elif defined(TICKET_RELAX)
+		int myTicket = ticket.fetch_add(1);
+		while(myTicket != nowServing)_mm_pause();
 #endif
 		int item = rand() % 100;
 		iterations++;
@@ -94,18 +118,12 @@ void* push(void* threadid)
 		}
 #if defined(LOCKED)		
 		pthread_mutex_unlock(&bufferLock);
-#elif defined(TTAS)
-		lock = 0;
-#elif defined(TTASNP)
-		lock = 0;
-#elif defined(CASLOCK)
-		lock = 0;
-#elif defined(TAS)
-		lock = 0;
-#elif defined(TASWP)
-		lock = 0;
 #elif defined(TICKET)
 		nowServing++;
+#elif defined(TICKET_RELAX)
+		nowServing++;
+#else
+		lock = 0;
 #endif	
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -142,6 +160,24 @@ void* pop(void* threadid)
 #elif defined(TICKET)
 		int myTicket = ticket.fetch_add(1);
 		while(myTicket != nowServing)sleep(myTicket - nowServing);
+#elif defined(TTAS_RELAX)
+		do{
+			while(lock.load() == 1)_mm_pause();
+		}while(lock.exchange(1));
+#elif defined(CASLOCKND)
+		while(true){
+			if(lock.compare_exchange_strong(notTaken, taken))break;
+		}
+#elif defined(CASLOCK_RELAX)
+		while(true){
+			if(lock.compare_exchange_strong(notTaken, taken))break;
+			_mm_pause();
+		}
+#elif defined(TAS_RELAX)
+		while(lock.exchange(1))_mm_pause();
+#elif defined(TICKET_RELAX)
+		int myTicket = ticket.fetch_add(1);
+		while(myTicket != nowServing)_mm_pause();
 #endif
 		iterations++;
 		if (front == -1 && back == -1) {
@@ -166,18 +202,12 @@ void* pop(void* threadid)
 		}
 #if defined(LOCKED)
 		pthread_mutex_unlock(&bufferLock);
-#elif defined(TTAS)
-		lock = 0;
-#elif defined(TTASNP)
-		lock = 0;
-#elif defined(CASLOCK)
-		lock = 0;
-#elif defined(TAS)
-		lock = 0;
-#elif defined(TASWP)
-		lock = 0;
 #elif defined(TICKET)
 		nowServing++;
+#elif defined(TICKET_RELAX)
+		nowServing++;
+#else
+		lock = 0;
 #endif
 		gettimeofday(&stop_time, NULL);//If the thread has run for one second or more then stop
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;

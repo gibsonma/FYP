@@ -9,6 +9,7 @@
 #include <sys/time.h>
 #include <atomic>
 #include <unistd.h>
+#include "xmmintrin.h"
 #define NUM_THREADS 1
 #define MAX_THREAD_VAL 128
 #define KEY_RANGE 10000
@@ -25,7 +26,11 @@
 //#define CASLOCKND
 //#define TAS
 //#define TASWP
-#define TICKET
+//#define TICKET
+//#define TTAS_RELAX
+//#define CASLOCK_RELAX
+//#define TAS_RELAX
+#define TICKET_RELAX
 
 pthread_mutex_t listLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -64,6 +69,10 @@ void* add(void* threadid)
 		do{
 			while(lock.load() == 1)sleep(PAUSE);
 		}while(lock.exchange(1));
+#elif defined(TTAS_RELAX)
+		do{
+			while(lock.load() == 1)_mm_pause();
+		}while(lock.exchange(1));
 #elif defined(TTASNP)
 		do{
 			while(lock.load() == 1);
@@ -75,6 +84,11 @@ void* add(void* threadid)
 			sleep(rand() % delay);
 			if(delay < MAX_DELAY)delay = 2 * delay;
 		}
+#elif defined(CASLOCK_RELAX)
+		while(true){
+			if(lock.compare_exchange_strong(notTaken, taken))break;
+			_mm_pause();
+		}
 #elif defined(CASLOCKND)
 		while(true){
 			if(lock.compare_exchange_strong(notTaken, taken))break;
@@ -83,9 +97,14 @@ void* add(void* threadid)
 		while(lock.exchange(1));
 #elif defined(TASWP)
 		while(lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+		while(lock.exchange(1))_mm_pause();
 #elif defined(TICKET)
 		int myTicket = ticket.fetch_add(1);
 		while(myTicket != nowServing)sleep(myTicket - nowServing);
+#elif defined(TICKET_RELAX)
+		int myTicket = ticket.fetch_add(1);
+		while(myTicket != nowServing)_mm_pause();
 #endif
 		int key = rand() % KEY_RANGE;
 		iterations++;
@@ -131,6 +150,8 @@ void* add(void* threadid)
 		pthread_mutex_unlock(&listLock);
 #elif defined(TICKET)
 		nowServing++;
+#elif defined(TICKET_RELAX)
+		nowServing++;
 #else
 		lock = 0;
 #endif
@@ -150,6 +171,10 @@ void* remove(void* threadid)
 		do{
 			while(lock.load() == 1)sleep(PAUSE);
 		}while(lock.exchange(1));
+#elif defined(TTAS_RELAX)
+		do{
+			while(lock.load() == 1)_mm_pause();
+		}while(lock.exchange(1));
 #elif defined(TTASNP)
 		do{
 			while(lock.load() == 1);
@@ -161,6 +186,11 @@ void* remove(void* threadid)
 			sleep(rand() % delay);
 			if(delay < MAX_DELAY)delay = 2 * delay;
 		}
+#elif defined(CASLOCK_RELAX)
+		while(true){
+			if(lock.compare_exchange_strong(notTaken, taken))break;
+			_mm_pause();
+		}
 #elif defined(CASLOCKND)
 		while(true){
 			if(lock.compare_exchange_strong(notTaken, taken))break;
@@ -169,9 +199,14 @@ void* remove(void* threadid)
 		while(lock.exchange(1));
 #elif defined(TASWP)
 		while(lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+		while(lock.exchange(1))_mm_pause();
 #elif defined(TICKET)
 		int myTicket = ticket.fetch_add(1);
 		while(myTicket != nowServing)sleep(myTicket - nowServing);
+#elif defined(TICKET_RELAX)
+		int myTicket = ticket.fetch_add(1);
+		while(myTicket != nowServing)_mm_pause();
 #endif
 		int key = rand() % KEY_RANGE;
 		iterations++;
@@ -206,6 +241,8 @@ void* remove(void* threadid)
 #if defined(LOCKED)
 		pthread_mutex_unlock(&listLock);
 #elif defined(TICKET)
+		nowServing++;
+#elif defined(TICKET_RELAX)
 		nowServing++;
 #else
 		lock = 0;
