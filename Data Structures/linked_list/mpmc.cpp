@@ -11,7 +11,9 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <unistd.h>
-#define KEY_RANGE 128
+//#define KEY_RANGE 128
+//#define KEY_RANGE 131072
+#define KEY_RANGE 134217728
 #define MAX_THREAD_VAL 128
 #define EXECUTION_TIME 1
 //#define DEBUG

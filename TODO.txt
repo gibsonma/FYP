@@ -1,4 +1,5 @@
-Add in modes using cpu relax/pause instruction instead of sleep and compare DONE
+Add in modes using cpu relax/pause instruction instead of sleep and compare DONE - Ticket lock acting as one would expect
+
 change key size to powers of two, so 100->128 and so on 
 Adapt the linked list to become a MPMC buffer, with an atomic head&tail with threads adding and removing from their respective ends, ignoring duplicates and sorting DONE NEEDS DATA COLLECTION
 Investigate cache misses using perf USE INSTRUCTION IN TO-DO
@@ -14,5 +15,4 @@ Done this session:
 Group FYP
 
 Done this session:
-
 
