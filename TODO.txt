@@ -1,5 +1,7 @@
-Modify MPMC buffer so that the head is the rightmost and the tail is leftmost
-Compare to MPMC buffer
+Modify MPMC buffer so that the head is the rightmost and the tail is leftmost DONE
+Implement locked MPMPC alt buffer
+Collect data from both structures
+Compare to MPMC original buffer
 Gather perf data on all backlogged structures
 Change graph names
 Research lockless hash table in Art of Microprocessor Programming
