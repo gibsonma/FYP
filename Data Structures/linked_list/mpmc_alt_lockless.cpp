@@ -37,7 +37,7 @@ void printList()
 {
 	Node * tmpNode = tail.load();
 	long long count = 0;
-	cout << "List: ";
+//	cout << "List: ";
 	while(tmpNode != NULL)
 	{
 		//cout << tmpNode->key << ",";
@@ -125,12 +125,12 @@ int main()
 		}
 		gettimeofday(&stop_time, NULL);
 		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-		printf("%lld ,\n",iterations/EXECUTION_TIME);
+		printf("%lld ,",iterations/EXECUTION_TIME);
 		//      printf("Total executing time %lld microseconds, %lld iterations/s  and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
 		iterations = 0;
 	}
 #if defined(DEBUG)
-	cout << "Final list: "; printList();
+	printList();
 #endif
 	return 0;
 }
