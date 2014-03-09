@@ -12,7 +12,7 @@
 #include "xmmintrin.h"
 #define NUM_THREADS 1
 #define MAX_THREAD_VAL 128
-#define KEY_RANGE 10000
+#define KEY_RANGE 128
 #define EXECUTION_TIME 1
 #define PAUSE 2
 #define MIN_DELAY 1
@@ -23,14 +23,14 @@
 //#define TTAS //Uses a spinlock implemented with C++ atomics
 //#define TTASNP
 //#define CASLOCK
-//#define CASLOCKND
+#define CASLOCKND
 //#define TAS
 //#define TASWP
 //#define TICKET
 //#define TTAS_RELAX
 //#define CASLOCK_RELAX
 //#define TAS_RELAX
-#define TICKET_RELAX
+//#define TICKET_RELAX
 
 pthread_mutex_t listLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -283,7 +283,7 @@ int main()
 		}
 		gettimeofday(&stop_time, NULL);
 		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-		printf("%lld ,",iterations/EXECUTION_TIME);
+		printf("%lld ,\n",iterations/EXECUTION_TIME);
 	//	printf("Total executing time %lld microseconds with %lld iterations per second and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
 		iterations = 0;
 	}

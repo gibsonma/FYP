@@ -1,3 +1,7 @@
+/*
+  A single producer, single consumer buffer that uses the C++ 11 atomic library to implement a 
+  lockless algorithm
+*/
 #include <iostream>
 #include <atomic>
 #include "pthread.h"
@@ -6,7 +10,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 #define NUM_THREADS 2
-#define SIZE 100000000
+#define SIZE 128
+#define KEY_RANGE 128
 #define EXECUTION_TIME 1
 #define PAUSE 2
 
@@ -18,14 +23,14 @@ int * buffer;
 int item, currentEnd, nextEnd, currentStart;
 struct timeval start_time, stop_time;
 long long total_time = 0, tstart = 0, tstop = 0;
-volatile long long iterations = 0;
+std::atomic<int> iterations = ATOMIC_VAR_INIT(0);
 
 void * push(void* threadid)
 {
 	while(true)
 	{
-		item = (rand() % 100) + 1;
-		iterations++;
+		item = rand() % KEY_RANGE;
+		std::atomic_fetch_add(&iterations, 1);
 		currentEnd = endB;
 		nextEnd = (endB + 1) % SIZE;
 		if(nextEnd != startB)
@@ -43,7 +48,7 @@ void * pop(void * threadid)
 {
 	while(true)
 	{
-		iterations++;
+		std::atomic_fetch_add(&iterations, 1);
 		currentStart = startB;
 		if(currentStart == endB){}
 		else
@@ -80,7 +85,7 @@ int main()
 	for(t = 0; t < NUM_THREADS; t++)pthread_join(threads[t], NULL);
 	gettimeofday(&stop_time, NULL);
 	total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-	printf("%lld ,",iterations/EXECUTION_TIME);
+	printf("%lld ,\n",iterations/EXECUTION_TIME);
 	iterations = 0;
 	return 0;
 }

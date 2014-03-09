@@ -12,7 +12,8 @@
 #include "xmmintrin.h"
 #define NUM_THREADS 1
 #define MAX_THREAD_VAL 128
-#define SIZE 1000000
+#define SIZE 128
+#define KEY_RANGE 128
 #define EXECUTION_TIME 1
 #define PAUSE 2
 #define MIN_DELAY 1
@@ -96,7 +97,7 @@ void* push(void* threadid)
 		int myTicket = ticket.fetch_add(1);
 		while(myTicket != nowServing)_mm_pause();
 #endif
-		int item = rand() % 100;
+		int item = rand() % KEY_RANGE;
 		iterations++;
 		if (front == 0 && back == size || front == back + 1) {
 		}
