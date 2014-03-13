@@ -2,7 +2,8 @@ Modify MPMC buffer so that the head is the rightmost and the tail is leftmost DO
 Implement locked MPMPC alt buffer DONE mpmc_alt_locked
 Collect data from both structures DONE MPMC_ALT
 Compare to MPMC original buffer DONE Not much difference
-Ensure data is complete and in the same format for all backlogged structures 
+Ensure data is complete and in the same format for all backlogged structures DONE
+Encapsulate head inside List struct DONE NOTE cannot call list->add in pthread, get error
 Change graph names
 Research lockless hash table in Art of Microprocessor Programming
 Implement Locked/Lockless hash table
@@ -12,10 +13,7 @@ Report
 
 
 Done this session:
-local linkedlist_locked data collected for 128
-updated spsc.cpp
-Updated spsc data with 128 and perf
-Updated ring.cpp with 128 and perf
+
 
 
 Group FYP
