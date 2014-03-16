@@ -1,8 +1,7 @@
-/*
-   A lockless hash table
-   If any single bucket exceeds global threshold, double table size - Could have a global atomic and could compare each bucket's length to it after an add
+/*lockless hash table
+  If any single bucket exceeds global threshold, double table size - Could have a global atomic and could compare each bucket's length to it after an add
 
-   (Pg 302/303) Coarse Grained - To resize table, lock the set, ensure table length is as expected, initialise and new table with double the capacity, transfer items from the old buckets to the new, unlock set
+  (Pg 302/303) Coarse Grained - To resize table, lock the set, ensure table length is as expected, initialise and new table with double the capacity, transfer items from the old buckets to the new, unlock set
  */
 #include <atomic>
 #include <iostream>
@@ -24,6 +23,9 @@
 #define MIN_DELAY 1
 #define MAX_DELAY 10
 #define DEBUG
+//#define RESIZE//Defines the resizing functionality
+#define MAX_LIST_LENGTH 10//If a list's length is greater than this, the table resizes
+
 //Modes of Operation - If neither defined then defaults to assembly spinlock
 #define LOCKED //Uses simple mutex blocking
 //#define TTAS //Uses a spinlock implemented with C++ atomics
@@ -57,26 +59,76 @@ struct Node{
 struct List{
 	Node * volatile head;
 	Node * volatile tail;
+	int listLength = 0;
+	void add(int key);
 };
 struct Table{
 	int numItems;
 	int size;
 	List ** table;
-	Table() 
+	Table(int tableLength) 
 	{
-		size = INIT_TABLE_SIZE;
+		size = tableLength;
 		table = new List*[size];
 		for(int i = 0; i < size; i++)table[i] = NULL;
 		numItems = 0;
 	}
 };
-Table * htable = new Table();
+Table * htable = new Table(INIT_TABLE_SIZE);
 int hashFunc(int item)
 {
 	return item % htable->size;
 }
 
-
+#if defined(RESIZE)
+//Non threaded functions for moving buckets to a new table
+//Only called when a lock is acquired so no need for additonal locking
+void List::add(int key)
+{
+	Node * newNode = new Node(key);
+	if(head == NULL || tail == NULL)
+	{
+		head = newNode;
+		tail = newNode;
+	}
+	else
+	{
+		head->next = newNode;
+		head = newNode;
+	}
+}
+//Creates a new table of twice the size of the current table. Transfers all the buckets
+//over to the new table before returning it
+Table * resize(int oldTableLength)
+{
+	if(oldTableLength != htable->size)
+	{
+		return htable;
+	}
+	int newLength = oldTableLength * 2;
+	Table * newTable = new Table(newLength);
+	Node * tmpTail;
+	Node * tmpHead;
+	int hash;
+	for(int i = 0; i < htable->size; i++)
+	{
+		if(htable->table[i] != NULL)
+		{
+			List * currList = htable->table[i];
+			tmpTail = currList->tail;
+			tmpHead = currList->head;
+			while(tmpTail != NULL && tmpTail != tmpHead->next)
+			{
+				hash = tmpTail->key % newLength;
+				if(newTable->table[hash] == NULL)newTable->table[hash] = new List();
+				newTable->table[hash]->add(tmpTail->key);
+				tmpTail = tmpTail->next;
+			}
+		}
+	}
+	return newTable;
+}
+#endif
 void printTable()
 {
 	List * currBucket;
@@ -90,26 +142,20 @@ void printTable()
 			currBucket = htable->table[i];
 			tmpTail = currBucket->tail;
 			tmpHead = currBucket->head;
-			cout << "List contained at index: " << i << "\n";
+			cout << "List contained at index: " << i << " ";
 			while(tmpTail != NULL && tmpTail != tmpHead->next)
 			{
-				//		cout << tmpTail->key << " , ";
+				//cout << tmpTail->key << " , ";
 				count++;
 				tmpTail = tmpTail->next;
 			}
 
-			//	if(currBucket->tail.load() == NULL)cout << "Tail : NULL ";
-			//	else cout << "Tail : " << currBucket->tail.load()->key << " ";
-			//	if(currBucket->head.load() == NULL)cout << "Head : NULL ";
-			//	else cout << "Head : " << currBucket->head.load()->key << " ";
-			cout << "Number of items in list: " << count << "\n";
+			cout << " Number of items in list: " << count << "\n";
 			count = 0;
 		}
-		//	else cout << "Table index " << i << " empty\n";
 	}
 	cout << "\n";
 }
-
 void * add(void * threadid)
 {
 	while(true)
@@ -158,7 +204,7 @@ void * add(void * threadid)
 		int myTicket = ticket.fetch_add(1);
 		while(myTicket != nowServing)_mm_pause();
 #endif
-		int key = rand() % KEY_RANGE;
+		int key = rand();
 		int hash = hashFunc(key);
 		//cout << "Attempting to add " << key << " to index " << hash << "\n";
 		Node * newNode = new Node(key);
@@ -172,18 +218,30 @@ void * add(void * threadid)
 			tmpList = htable->table[hash];
 			tmpList->head = newNode;
 			tmpList->tail = newNode;
+			tmpList->listLength = 1;
 		}
 		else if(tmpList->head == NULL || tmpList->tail == NULL)
 		{
 			tmpList->head = newNode;
 			tmpList->tail = newNode;
+			tmpList->listLength = 1;
 		}
 		else 
 		{
 			tmpList->head->next = newNode;
 			tmpList->head = newNode;
+			tmpList->listLength++;
 		}
-
+#if defined(RESIZE)
+		if(tmpList->listLength >= MAX_LIST_LENGTH)
+		{
+			//		cout << "Table before resize\n";
+			//		printTable();
+			htable = resize(htable->size);
+			//		cout << "Table after resize\n";
+			//		printTable();
+		}
+#endif
 #if defined(LOCKED)
 		pthread_mutex_unlock(&listLock);
 #elif defined(TICKET)
@@ -257,6 +315,7 @@ void * remove(void * threadid)
 			{
 				//cout << "Attempting to remove the tail " << tmpTail->key << "\n";
 				tmpList->tail = tmpTail->next;
+				tmpList->listLength--;
 				if(tmpTail->next == NULL)
 				{
 					//cout << "List is now empty\n";
@@ -264,8 +323,6 @@ void * remove(void * threadid)
 					//cout << "Head set to null\n";
 				}
 				//else cout << "New tail is " << tmpTail->next->key << "\n";
-				//printTable();
-
 			}
 		}
 #if defined(LOCKED)
@@ -277,7 +334,6 @@ void * remove(void * threadid)
 #else
 		lock = 0;
 #endif
-
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
@@ -308,6 +364,8 @@ int main()
 #if defined(DEBUG)
 	printTable();
 #endif
+#if defined(RESIZE)
+	cout << "Final Size: " << htable->size << "\n";
+#endif
 	return 0;
 }
-

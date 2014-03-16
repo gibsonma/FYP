@@ -1,6 +1,7 @@
 Change graph names
-Implement Locked hash table
-Implement Lockless hash table
+Implement Locked hash table DONE
+Implement Lockless hash table DONE
+Implement resize function for both DONE for locked
 Gather data for both
 Look at C++ optimisations http://www.agner.org/optimize/#manuals
 Report
@@ -14,4 +15,3 @@ Done this session:
 Group FYP
 
 Done this session:
-
