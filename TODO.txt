@@ -1,7 +1,8 @@
 Change graph names
-Implement Locked hash table DONE
-Implement Lockless hash table DONE
-Implement resize function for both DONE for locked
+Implement a lock per bucket for the locked hash table
+Implement a resize function for the lockless table
+Add in a contains function for both DONE
+Make 1st draft of presentation slides - See notes for slide details
 Gather data for both
 Look at C++ optimisations http://www.agner.org/optimize/#manuals
 Report
@@ -15,3 +16,22 @@ Done this session:
 Group FYP
 
 Done this session:
+
+
+Normal		X
+Fire		X
+Water 		X
+Electric	X
+Grass		X
+Ice			X
+Fighting	X
+Poison		X
+Ground		X
+Flying		X
+Psychic
+Bug			X
+Rock		X
+Ghost
+Dragon
+
+Need Fighting, Water and ground

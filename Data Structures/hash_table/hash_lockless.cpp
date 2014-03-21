@@ -3,6 +3,20 @@
    If any single bucket exceeds global threshold, double table size - Could have a global atomic and could compare each bucket's length to it after an add
 
    (Pg 302/303) Coarse Grained - To resize table, lock the set, ensure table length is as expected, initialise and new table with double the capacity, transfer items from the old buckets to the new, unlock set
+ 
+   Resize Algorithm:
+   * OPTION - Give each list a lock variable which could be used by a thread to use a mutex
+   * Allocate new, larger table
+   * For each new bucket, search the corresponding old bucket for the first entry that hashes to the new bucket
+   * Link the new bucket to this entry
+   * Set the Table Size
+   * Publish the new table pointer
+   * Wait for all current readers to finish. All new readers will see the new table
+   * For each bucket in the old table, advance the pointer for that old bucket until it reaches a node 
+     that doesn't hash to the same bucket as the previous node. The previous node is P. FInd the next node
+     which does hash to the same bucket as P, or NULL if end of list reached
+   * Set P's pointer to that subsequent node pointer, bypassing the nodes which do not hash to P's bucket
+   * Free the old hash table
  */
 #include <atomic>
 #include <iostream>
@@ -19,11 +33,19 @@
 //#define INIT_TABLE_SIZE 134217728
 #define MAX_THREAD_VAL 128
 #define EXECUTION_TIME 1
+#define TCOUNT
+#define SEARCH
 //#define DEBUG
 using namespace std;
 struct timeval start_time, stop_time;
 long long total_time = 0, tsart = 0, tstop = 0;
 std::atomic<int> iterations = ATOMIC_VAR_INIT(0);
+std::atomic<int> pSearches = ATOMIC_VAR_INIT(0);
+std::atomic<int> nSearches = ATOMIC_VAR_INIT(0);
+std::atomic<int> containsC = ATOMIC_VAR_INIT(0);
+std::atomic<int> addC = ATOMIC_VAR_INIT(0);
+std::atomic<int> removeC = ATOMIC_VAR_INIT(0);
+
 struct Node{
 	int key;
 	Node * next;
@@ -73,10 +95,6 @@ void printTable()
 				tmpTail = tmpTail->next;
 			}
 			
-		//	if(currBucket->tail.load() == NULL)cout << "Tail : NULL ";
-		//	else cout << "Tail : " << currBucket->tail.load()->key << " ";
-		//	if(currBucket->head.load() == NULL)cout << "Head : NULL ";
-		//	else cout << "Head : " << currBucket->head.load()->key << " ";
 			cout << "Number of items in list: " << count << "\n";
 			count = 0;
 		}
@@ -84,7 +102,16 @@ void printTable()
 	}
 	cout << "\n";
 }
-
+#if defined(SEARCH)
+void printSearchResults()
+{
+	cout << "Positive Searches: " << pSearches << " Negative Searches: " << nSearches << "\n";
+}
+void printTCounts()
+{
+	cout << "Contains: " << containsC << " Adds: " << addC << " Removes: " << removeC << "\n";
+}
+#endif
 void * add(void * threadid)
 {
 	while(true)
@@ -162,7 +189,61 @@ void * remove(void * threadid)
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
 }
+void * contains(void * threadid)
+{
+	while(true)
+	{
+		std::atomic_fetch_add(&iterations, 1);
+		int key = rand() % KEY_RANGE;
+		int hash = hashFunc(key);
+		Node * tmpTail;
+		List * tmpList = htable->table[hash];
+		if(tmpList != NULL)
+		{
+			tmpTail = tmpList->tail.load();
+			while(tmpTail != NULL && tmpList == htable->table[hash])
+			{
+				if(tmpTail->key == key)
+				{
+					std::atomic_fetch_add(&pSearches, 1);
+					break;
+				}
+				tmpTail = tmpTail->next;
+			}
+			if(tmpTail == NULL)std::atomic_fetch_add(&nSearches, 1);
+		}
+		else std::atomic_fetch_add(&nSearches, 1);
 
+		gettimeofday(&stop_time, NULL);
+		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
+
+	}
+}
+void * choose(void * threadid)
+{
+	int num = rand() % 10;
+	if(num >= 5)
+	{
+#if defined(SEARCH)
+		std::atomic_fetch_add(&containsC, 1);
+#endif		
+		contains(threadid);
+	}
+	else if(num >= 2)
+	{
+#if defined(SEARCH)
+		std::atomic_fetch_add(&addC, 1);
+#endif
+		add(threadid);
+	}
+	else 
+	{
+#if defined(SEARCH)
+		std::atomic_fetch_add(&removeC, 1);
+#endif
+		remove(threadid);
+	}
+}
 int main()
 {
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
@@ -172,8 +253,7 @@ int main()
 		pthread_t threads[i];
 		for(t = 0; t < i; t++)
 		{
-			if(t % 2 == 0)rc = pthread_create(&threads[t], NULL, add, (void *)t);
-			else rc = pthread_create(&threads[t], NULL, remove, (void *)t);
+			rc = pthread_create(&threads[t], NULL, choose, (void *)t);
 		}
 		for(t = 0; t < i; t++)
 		{
@@ -187,6 +267,10 @@ int main()
 	}
 #if defined(DEBUG)
 	printTable();
+#endif
+#if defined(SEARCH)
+	printSearchResults();
+	printTCounts();
 #endif
 	return 0;
 }

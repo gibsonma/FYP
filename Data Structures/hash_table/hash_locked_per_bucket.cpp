@@ -1,4 +1,5 @@
-/*lockless hash table
+/*
+  Locked hash table
   If any single bucket exceeds global threshold, double table size - Could have a global atomic and could compare each bucket's length to it after an add
 
   (Pg 302/303) Coarse Grained - To resize table, lock the set, ensure table length is as expected, initialise and new table with double the capacity, transfer items from the old buckets to the new, unlock set
@@ -79,9 +80,9 @@ struct Table{
 	}
 };
 Table * htable = new Table(INIT_TABLE_SIZE);
-int hashFunc(int item)
+int hashFunc(int item, Table * table)
 {
-	return item % htable->size;
+	return item % table->size;
 }
 
 #if defined(RESIZE)
@@ -113,20 +114,41 @@ Table * resize(int oldTableLength)
 	Table * newTable = new Table(newLength);
 	Node * tmpTail;
 	Node * tmpHead;
+	Node * tmpNode;
+	Node * prevNode;
+	Node * specNode;
+	List * newList;
+	List * oldList;
 	int hash;
-	for(int i = 0; i < htable->size; i++)
+	int prevHash;
+	int key;
+	for(int i = 0; i < newTable->size; i++)
 	{
-		if(htable->table[i] != NULL)
+		newList = newTable->table[i];
+		oldList = htable->table[i%oldTableLength];
+		tmpTail = oldList->tail;
+		while(tmpTail != NULL)
 		{
-			List * currList = htable->table[i];
-			tmpTail = currList->tail;
-			tmpHead = currList->head;
-			while(tmpTail != NULL && tmpTail != tmpHead->next)
+			key = tmpTail->key;
+			hash = hashFunc(key,newTable);
+			if(hash == i)
 			{
-				hash = tmpTail->key % newLength;
-				if(newTable->table[hash] == NULL)newTable->table[hash] = new List();
-				newTable->table[hash]->add(tmpTail->key);
-				tmpTail = tmpTail->next;
+				newList->tail = tmpTail;
+				break;
+			}
+			tmpTail = tmpTail->next;
+		}
+		if(newList->tail != NULL)
+		{
+			tmpTail = newList->tail;
+			prevNode = tmpTail;
+			prevHash = hashFunc(prevNode->key, newTable);
+			tmpTail = tmpTail->next;
+			hash = hashFunc(tmpTail->key, newTable);
+			if(prevHash != hash)
+			{
+				specNode = prevNode;
+				//TODO Break this up into functions and test it
 			}
 		}
 	}
@@ -223,7 +245,7 @@ void * add(void * threadid)
 		while(myTicket != nowServing)_mm_pause();
 #endif
 		int key = rand() % KEY_RANGE;
-		int hash = hashFunc(key);
+		int hash = hashFunc(key, htable);
 //		cout << "Attempting to add " << key << " to index " << hash << "\n";
 		Node * newNode = new Node(key);
 		Node * tmpHead;
@@ -325,7 +347,7 @@ void * remove(void * threadid)
 		while(myTicket != nowServing)_mm_pause();
 #endif
 
-		int hash = hashFunc(rand() % KEY_RANGE);
+		int hash = hashFunc(rand(), htable);
 		Node * tmpTail;
 		List * tmpList = htable->table[hash];
 		iterations++;
@@ -371,7 +393,7 @@ void * contains(void * threadid)
 //		count++;
 	//	srand(time(NULL));
 		int key = rand() % KEY_RANGE;
-		int hash = hashFunc(key);
+		int hash = hashFunc(key, htable);
 //		cout << "Searching for value " << key << "\n";
 		List * tmpList = htable->table[hash];
 		Node * tmpTail;
