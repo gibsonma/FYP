@@ -23,7 +23,7 @@
 #define MIN_DELAY 1
 #define MAX_DELAY 10
 #define TCOUNT//Tracks how many threads did which function
-#define SEARCH//Prints out the number of +tive/-tive searches
+//#define SEARCH//Prints out the number of +tive/-tive searches
 //#define DEBUG//Print out the table at the end of the program
 //#define RESIZE//Defines the resizing functionality
 #define MAX_LIST_LENGTH 10//If a list's length is greater than this, the table resizes
@@ -409,12 +409,12 @@ void * contains(void * threadid)
 void * choose(void * threadid)
 {
 	int num = rand() % 10;
-	if(num > 5)
+	if(num >= 5)
 	{
 		containsC++;
 		contains(threadid);
 	}
-	else if(num > 2)
+	else if(num >= 2)
 	{
 		addC++;
 		add(threadid);

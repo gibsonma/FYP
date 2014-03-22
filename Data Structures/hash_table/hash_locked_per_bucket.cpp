@@ -1,8 +1,6 @@
 /*
-  Locked hash table
-  If any single bucket exceeds global threshold, double table size - Could have a global atomic and could compare each bucket's length to it after an add
-
-  (Pg 302/303) Coarse Grained - To resize table, lock the set, ensure table length is as expected, initialise and new table with double the capacity, transfer items from the old buckets to the new, unlock set
+  Locked hash table, instead of locking down the table while entering a critical section, each list contains
+  its own lock, meaning that multiple threads can act on the table at once
  */
 #include <atomic>
 #include <iostream>
@@ -65,6 +63,7 @@ struct List{
 	Node * volatile head;
 	Node * volatile tail;
 	int listLength = 0;
+	pthread_mutex_t nodeLock = PTHREAD_MUTEX_INITIALIZER;
 	void add(int key);
 };
 struct Table{
@@ -111,7 +110,7 @@ Table * resize(int oldTableLength)
 		return htable;
 	}
 	int newLength = oldTableLength * 2;
-	Table * newTable = new Table(newLength);
+	Table * newTable = new Table(newLength);//Allocate new table
 	Node * tmpTail;
 	Node * tmpHead;
 	Node * tmpNode;
@@ -119,25 +118,31 @@ Table * resize(int oldTableLength)
 	Node * specNode;
 	List * newList;
 	List * oldList;
-	int hash;
+	int hash, altHash;
 	int prevHash;
 	int key;
-	for(int i = 0; i < newTable->size; i++)
+	for(int i = 0; i < newTable->size; i++)//For each new bucket
 	{
+		newTable->table[i] = new List();
 		newList = newTable->table[i];
-		oldList = htable->table[i%oldTableLength];
+		cout << "New bucket: " << i << " Old Bucket: " << i%oldTableLength << "\n";
+		oldList = htable->table[i%oldTableLength];//Get corresponding old bucket
 		tmpTail = oldList->tail;
-		while(tmpTail != NULL)
+		while(tmpTail != NULL)//Search old bucket for first item that hashes to new table
 		{
 			key = tmpTail->key;
 			hash = hashFunc(key,newTable);
-			if(hash == i)
+			altHash = hashFunc(key, htable);
+			cout << "Node key: " << key << " Hash of newTable: " << hash << " Hash of old table: " << altHash << "\n";
+			if(hash == altHash)//If entry maps to new hash
 			{
-				newList->tail = tmpTail;
+				newList->tail = tmpTail;//Link new bucket to entry
+				cout << "New bucket linked to node: " << tmpTail->key << "\n";
 				break;
 			}
-			tmpTail = tmpTail->next;
+			tmpTail = tmpTail->next;//Else check next entry in bucket
 		}
+		/*
 		if(newList->tail != NULL)
 		{
 			tmpTail = newList->tail;
@@ -151,6 +156,7 @@ Table * resize(int oldTableLength)
 				//TODO Break this up into functions and test it
 			}
 		}
+		*/
 	}
 	return newTable;
 }
@@ -160,7 +166,7 @@ void printTable()
 	List * currBucket;
 	Node * tmpTail; 
 	Node * tmpHead;
-	int count = 0;
+	int count = 0, highC = 0;
 	for(int i = 0; i < htable->size; i++)
 	{
 		if(htable->table[i] != NULL)
@@ -173,10 +179,11 @@ void printTable()
 			{
 				//cout << tmpTail->key << " , ";
 				count++;
+				if(tmpTail->key > highC)highC = tmpTail->key;
 				tmpTail = tmpTail->next;
 			}
 
-			cout << " Number of items in list: " << count << "\n";
+			cout << " Number of items in list: " << count << " Highest key: " << highC << "\n";
 			count = 0;
 		}
 	}
@@ -201,49 +208,6 @@ void * add(void * threadid)
 	while(true)
 	{
 //count++;
-#if defined(LOCKED)
-		pthread_mutex_lock(&listLock);
-#elif defined(TTAS)
-		do{
-			while(lock.load() == 1)sleep(PAUSE);
-		}while(lock.exchange(1));
-#elif defined(TTAS_RELAX)
-		do{
-			while(lock.load() == 1)_mm_pause();
-		}while(lock.exchange(1));
-#elif defined(TTASNP)
-		do{
-			while(lock.load() == 1);
-		}while(lock.exchange(1));
-#elif defined(CASLOCK)
-		int delay = MIN_DELAY;
-		while(true){
-			if(lock.compare_exchange_strong(notTaken, taken))break;
-			sleep(rand() % delay);
-			if(delay < MAX_DELAY)delay = 2 * delay;
-		}
-#elif defined(CASLOCK_RELAX)
-		while(true){
-			if(lock.compare_exchange_strong(notTaken, taken))break;
-			_mm_pause();
-		}
-#elif defined(CASLOCKND)
-		while(true){
-			if(lock.compare_exchange_strong(notTaken, taken))break;
-		}
-#elif defined(TAS)
-		while(lock.exchange(1));
-#elif defined(TASWP)
-		while(lock.exchange(1))sleep(PAUSE);
-#elif defined(TAS_RELAX)
-		while(lock.exchange(1))_mm_pause();
-#elif defined(TICKET)
-		int myTicket = ticket.fetch_add(1);
-		while(myTicket != nowServing)sleep(myTicket - nowServing);
-#elif defined(TICKET_RELAX)
-		int myTicket = ticket.fetch_add(1);
-		while(myTicket != nowServing)_mm_pause();
-#endif
 		int key = rand() % KEY_RANGE;
 		int hash = hashFunc(key, htable);
 //		cout << "Attempting to add " << key << " to index " << hash << "\n";
@@ -256,21 +220,27 @@ void * add(void * threadid)
 		{
 			htable->table[hash] = new List();
 			tmpList = htable->table[hash];
+			pthread_mutex_lock(&tmpList->nodeLock);
 			tmpList->head = newNode;
 			tmpList->tail = newNode;
 			tmpList->listLength = 1;
+			pthread_mutex_unlock(&tmpList->nodeLock);
 		}
 		else if(tmpList->head == NULL || tmpList->tail == NULL)
 		{
+			pthread_mutex_lock(&tmpList->nodeLock);
 			tmpList->head = newNode;
 			tmpList->tail = newNode;
 			tmpList->listLength = 1;
+			pthread_mutex_unlock(&tmpList->nodeLock);
 		}
 		else 
 		{
+			pthread_mutex_lock(&tmpList->nodeLock);
 			tmpList->head->next = newNode;
 			tmpList->head = newNode;
 			tmpList->listLength++;
+			pthread_mutex_unlock(&tmpList->nodeLock);
 		}
 #if defined(RESIZE)
 		if(tmpList->listLength >= MAX_LIST_LENGTH)
@@ -281,15 +251,6 @@ void * add(void * threadid)
 			//		cout << "Table after resize\n";
 			//		printTable();
 		}
-#endif
-#if defined(LOCKED)
-		pthread_mutex_unlock(&listLock);
-#elif defined(TICKET)
-		nowServing++;
-#elif defined(TICKET_RELAX)
-		nowServing++;
-#else
-		lock = 0;
 #endif
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -303,56 +264,13 @@ void * remove(void * threadid)
 	while(true)
 	{
 //		count++;
-#if defined(LOCKED)
-		pthread_mutex_lock(&listLock);
-#elif defined(TTAS)
-		do{
-			while(lock.load() == 1)sleep(PAUSE);
-		}while(lock.exchange(1));
-#elif defined(TTAS_RELAX)
-		do{
-			while(lock.load() == 1)_mm_pause();
-		}while(lock.exchange(1));
-#elif defined(TTASNP)
-		do{
-			while(lock.load() == 1);
-		}while(lock.exchange(1));
-#elif defined(CASLOCK)
-		int delay = MIN_DELAY;
-		while(true){
-			if(lock.compare_exchange_strong(notTaken, taken))break;
-			sleep(rand() % delay);
-			if(delay < MAX_DELAY)delay = 2 * delay;
-		}
-#elif defined(CASLOCK_RELAX)
-		while(true){
-			if(lock.compare_exchange_strong(notTaken, taken))break;
-			_mm_pause();
-		}
-#elif defined(CASLOCKND)
-		while(true){
-			if(lock.compare_exchange_strong(notTaken, taken))break;
-		}
-#elif defined(TAS)
-		while(lock.exchange(1));
-#elif defined(TASWP)
-		while(lock.exchange(1))sleep(PAUSE);
-#elif defined(TAS_RELAX)
-		while(lock.exchange(1))_mm_pause();
-#elif defined(TICKET)
-		int myTicket = ticket.fetch_add(1);
-		while(myTicket != nowServing)sleep(myTicket - nowServing);
-#elif defined(TICKET_RELAX)
-		int myTicket = ticket.fetch_add(1);
-		while(myTicket != nowServing)_mm_pause();
-#endif
-
 		int hash = hashFunc(rand(), htable);
 		Node * tmpTail;
 		List * tmpList = htable->table[hash];
 		iterations++;
 		if(tmpList != NULL)
 		{
+			pthread_mutex_lock(&tmpList->nodeLock);
 			tmpTail = tmpList->tail;
 			if(tmpTail != NULL)
 			{
@@ -367,16 +285,8 @@ void * remove(void * threadid)
 				}
 				//else cout << "New tail is " << tmpTail->next->key << "\n";
 			}
+			pthread_mutex_unlock(&tmpList->nodeLock);
 		}
-#if defined(LOCKED)
-		pthread_mutex_unlock(&listLock);
-#elif defined(TICKET)
-		nowServing++;
-#elif defined(TICKET_RELAX)
-		nowServing++;
-#else
-		lock = 0;
-#endif
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
@@ -389,9 +299,7 @@ void * contains(void * threadid)
 //	while(count < 5)
 	while(true)
 	{
-		pthread_mutex_lock(&listLock);
 //		count++;
-	//	srand(time(NULL));
 		int key = rand() % KEY_RANGE;
 		int hash = hashFunc(key, htable);
 //		cout << "Searching for value " << key << "\n";
@@ -400,6 +308,7 @@ void * contains(void * threadid)
 		iterations++;
 		if(tmpList)
 		{
+			pthread_mutex_lock(&tmpList->nodeLock);
 			tmpTail = tmpList->tail;
 			while(tmpTail != NULL)
 			{
@@ -416,13 +325,15 @@ void * contains(void * threadid)
 //				cout << "Negative Serch on value " << key << "\n";
 				nSearches++;
 			}
+			pthread_mutex_unlock(&tmpList->nodeLock);
 		}
 		else 
 		{
 //			cout << "Null List for value " << key << "\n";
+			pthread_mutex_lock(&listLock);
 			nSearches++;
+			pthread_mutex_unlock(&listLock);
 		}
-		pthread_mutex_unlock(&listLock);
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
@@ -431,12 +342,12 @@ void * contains(void * threadid)
 void * choose(void * threadid)
 {
 	int num = rand() % 10;
-	if(num > 5)
+	if(num >= 5)
 	{
 		containsC++;
 		contains(threadid);
 	}
-	else if(num > 2)
+	else if(num >= 2)
 	{
 		addC++;
 		add(threadid);
@@ -450,6 +361,7 @@ void * choose(void * threadid)
 
 int main()
 {
+for(int k = 0; k < 20; k++){
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
 		srand(time(NULL));
 		gettimeofday(&start_time, NULL);
@@ -469,6 +381,7 @@ int main()
 		//      printf("Total executing time %lld microseconds, %lld iterations/s  and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
 		iterations = 0;
 	}
+}
 #if defined(DEBUG)
 	printTable();
 #endif

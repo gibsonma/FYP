@@ -1,22 +1,5 @@
 /*
    A lockless hash table
-   If any single bucket exceeds global threshold, double table size - Could have a global atomic and could compare each bucket's length to it after an add
-
-   (Pg 302/303) Coarse Grained - To resize table, lock the set, ensure table length is as expected, initialise and new table with double the capacity, transfer items from the old buckets to the new, unlock set
- 
-   Resize Algorithm:
-   * OPTION - Give each list a lock variable which could be used by a thread to use a mutex
-   * Allocate new, larger table
-   * For each new bucket, search the corresponding old bucket for the first entry that hashes to the new bucket
-   * Link the new bucket to this entry
-   * Set the Table Size
-   * Publish the new table pointer
-   * Wait for all current readers to finish. All new readers will see the new table
-   * For each bucket in the old table, advance the pointer for that old bucket until it reaches a node 
-     that doesn't hash to the same bucket as the previous node. The previous node is P. FInd the next node
-     which does hash to the same bucket as P, or NULL if end of list reached
-   * Set P's pointer to that subsequent node pointer, bypassing the nodes which do not hash to P's bucket
-   * Free the old hash table
  */
 #include <atomic>
 #include <iostream>
@@ -25,9 +8,9 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <unistd.h>
-#define KEY_RANGE 128
+//#define KEY_RANGE 128
 //#define KEY_RANGE 131072
-//#define KEY_RANGE 134217728
+#define KEY_RANGE 134217728
 #define INIT_TABLE_SIZE 128
 //#define INIT_TABLE_SIZE 131072
 //#define INIT_TABLE_SIZE 134217728
@@ -36,7 +19,10 @@
 #define TCOUNT
 #define SEARCH
 //#define DEBUG
+//#define RESIZE
+#define MAX_LIST_LENGTH 10
 using namespace std;
+pthread_mutex_t hLock = PTHREAD_MUTEX_INITIALIZER;
 struct timeval start_time, stop_time;
 long long total_time = 0, tsart = 0, tstop = 0;
 std::atomic<int> iterations = ATOMIC_VAR_INIT(0);
@@ -54,26 +40,53 @@ struct Node{
 struct List{
 	std::atomic<Node *> head;
 	std::atomic<Node *> tail;
+	int listLength = 0;
 };
 struct Table{
 	int numItems;
 	int size;
 	List ** table;
-	Table() 
+	Table(int tSize) 
 	{
-		size = INIT_TABLE_SIZE;
+		size = tSize;
 		table = new List*[size];
 		for(int i = 0; i < size; i++)table[i] = NULL;
 		numItems = 0;
 	}
 };
-Table * htable = new Table();
-int hashFunc(int item)
+Table * htable = new Table(INIT_TABLE_SIZE);
+int hashFunc(int item, Table * table)
 {
-	return item % htable->size;
+	return item % table->size;
 }
 
+#if defined(RESIZE)
+Table * resize(Table * oldTable)
+{
+	Table * newTable = new Table(oldTable->size * 2);//Allocate table of twice the size
+	Table * tmpTable = newTable;
+	List * newList;
+	List * oldList;
+	Node * tmpNode;
+	int key, newHash, oldHash;
+	if(tmpTable == newTable)
+	{
+		for(int i = 0; i < tmpTable->size; i++)
+		{
+			tmpTable->table[i] = new List();
+			newList = tmpTable->table[i];//Get new, empty bucket
+			oldList = oldTable->table[i % oldTable->size];//Get corresponding old bucket
+			tmpNode = oldList->tail.load();
+		//	while(tmpNode != NULL)
+		//	{
+		//		key = tmpNode->key;
+		//	}
 
+		}
+	}
+	return newTable;
+}
+#endif
 void printTable()
 {
 	List * currBucket;
@@ -90,15 +103,15 @@ void printTable()
 			cout << "List contained at index: " << i << "\n";
 			while(tmpTail != NULL && tmpTail != tmpHead->next)
 			{
-		//		cout << tmpTail->key << " , ";
+				//		cout << tmpTail->key << " , ";
 				count++;
 				tmpTail = tmpTail->next;
 			}
-			
+
 			cout << "Number of items in list: " << count << "\n";
 			count = 0;
 		}
-	//	else cout << "Table index " << i << " empty\n";
+		//	else cout << "Table index " << i << " empty\n";
 	}
 	cout << "\n";
 }
@@ -117,8 +130,8 @@ void * add(void * threadid)
 	while(true)
 	{
 		int key = rand() % KEY_RANGE;
-		int hash = hashFunc(key);
-//		cout << "Attempting to add " << key << " to index " << hash << "\n";
+		int hash = hashFunc(key, htable);
+		//		cout << "Attempting to add " << key << " to index " << hash << "\n";
 		Node * newNode = new Node(key);
 		Node * tmpHead;
 		Node * tmpTail;
@@ -132,7 +145,8 @@ void * add(void * threadid)
 			tmpTail = tmpList->tail.load();
 			if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode) && std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, newNode))
 			{
-//						cout << "New List created\n";
+				tmpList->listLength = 1;
+				//						cout << "New List created\n";
 			}
 		}
 		tmpHead = tmpList->head.load();
@@ -141,7 +155,8 @@ void * add(void * threadid)
 		{
 			if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode) && std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, newNode))
 			{
-//				cout << "List head & tail set\n";
+				tmpList->listLength = 1;
+				//				cout << "List head & tail set\n";
 			}
 		}
 		else if(tmpList == htable->table[hash] && tmpHead == tmpList->head.load()) 
@@ -149,9 +164,20 @@ void * add(void * threadid)
 			if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode))
 			{
 				tmpHead->next = newNode;
-//				cout << "Node " << newNode->key << " added to list\n";
+				tmpList->listLength++;
+				//				cout << "Node " << newNode->key << " added to list\n";
 			}
 		}
+#if defined(RESIZE)
+		if(tmpList != NULL && tmpList->listLength >= MAX_LIST_LENGTH)
+		{
+			//	pthread_mutex_lock(&hLock);
+			cout << "Locked\n";
+			htable = resize(htable);
+			//	pthread_mutex_unlock(&hLock);
+			cout << "Unlocked\n";
+		}
+#endif
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
@@ -162,7 +188,7 @@ void * remove(void * threadid)
 	while(true)
 	{
 		std::atomic_fetch_add(&iterations, 1);
-		int hash = hashFunc(rand() % KEY_RANGE);
+		int hash = hashFunc(rand() % KEY_RANGE, htable);
 		Node * tmpTail;
 		List * tmpList = htable->table[hash];
 		if(tmpList != NULL)
@@ -170,18 +196,20 @@ void * remove(void * threadid)
 			tmpTail = tmpList->tail.load();
 			if(tmpTail != NULL && tmpList == htable->table[hash])
 			{
-//				cout << "Attempting to remove the tail " << tmpTail->key << "\n";
+				//				cout << "Attempting to remove the tail " << tmpTail->key << "\n";
 				if(std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, tmpTail->next))
 				{
 					if(tmpTail->next == NULL)
 					{
-//						cout << "List is now empty\n";
+						tmpList->listLength = 0;
+						//						cout << "List is now empty\n";
 						Node * tmpHead = tmpList->head.load();
 						while(!std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, tmpTail->next));
-//						cout << "Head set to null\n";
+						//						cout << "Head set to null\n";
 					}
-//					else cout << "New tail is " << tmpTail->next->key << "\n";
-		//			printTable();
+					tmpList->listLength--;
+					//					else cout << "New tail is " << tmpTail->next->key << "\n";
+					//			printTable();
 				}
 			}
 		}
@@ -195,7 +223,7 @@ void * contains(void * threadid)
 	{
 		std::atomic_fetch_add(&iterations, 1);
 		int key = rand() % KEY_RANGE;
-		int hash = hashFunc(key);
+		int hash = hashFunc(key, htable);
 		Node * tmpTail;
 		List * tmpList = htable->table[hash];
 		if(tmpList != NULL)
