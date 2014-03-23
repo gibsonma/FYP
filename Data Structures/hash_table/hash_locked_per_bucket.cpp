@@ -21,8 +21,7 @@
 #define PAUSE 2
 #define MIN_DELAY 1
 #define MAX_DELAY 10
-#define TCOUNT//Tracks how many threads did which function
-#define SEARCH//Prints out the number of +tive/-tive searches
+#define COUNTS
 //#define DEBUG//Print out the table at the end of the program
 //#define RESIZE//Defines the resizing functionality
 #define MAX_LIST_LENGTH 10//If a list's length is greater than this, the table resizes
@@ -174,7 +173,6 @@ void printTable()
 			currBucket = htable->table[i];
 			tmpTail = currBucket->tail;
 			tmpHead = currBucket->head;
-			cout << "List contained at index: " << i << " ";
 			while(tmpTail != NULL && tmpTail != tmpHead->next)
 			{
 				//cout << tmpTail->key << " , ";
@@ -183,19 +181,17 @@ void printTable()
 				tmpTail = tmpTail->next;
 			}
 
-			cout << " Number of items in list: " << count << " Highest key: " << highC << "\n";
+			if(count > 0)cout << "List: " << i << " Number of items in list: " << count << " Highest key: " << highC << "\n";
 			count = 0;
 		}
 	}
 	cout << "\n";
 }
-#if defined(SEARCH)
+#if defined(COUNTS)
 void printSearchResults()
 {
-	cout << "Positive Searches: " << pSearches << " Negative Searches: " << nSearches << "\n";
+	cout << "Total Searches: " << (pSearches+nSearches) << " Positive Searches: " << pSearches << " Negative Searches: " << nSearches << "\n";
 }
-#endif
-#if defined(TCOUNT)
 void printTCounts()
 {
 	cout << "Contains: " << containsC << " Adds: " << addC << " Removes: " << removeC << "\n";
@@ -203,14 +199,10 @@ void printTCounts()
 #endif
 void * add(void * threadid)
 {
-//	int count = 0;
-//	while(count < 5)
 	while(true)
 	{
-//count++;
 		int key = rand() % KEY_RANGE;
 		int hash = hashFunc(key, htable);
-//		cout << "Attempting to add " << key << " to index " << hash << "\n";
 		Node * newNode = new Node(key);
 		Node * tmpHead;
 		Node * tmpTail;
@@ -245,11 +237,7 @@ void * add(void * threadid)
 #if defined(RESIZE)
 		if(tmpList->listLength >= MAX_LIST_LENGTH)
 		{
-			//		cout << "Table before resize\n";
-			//		printTable();
 			htable = resize(htable->size);
-			//		cout << "Table after resize\n";
-			//		printTable();
 		}
 #endif
 		gettimeofday(&stop_time, NULL);
@@ -259,11 +247,8 @@ void * add(void * threadid)
 
 void * remove(void * threadid)
 {
-	//int count = 0;
-	//while(count < 5)
 	while(true)
 	{
-//		count++;
 		int hash = hashFunc(rand(), htable);
 		Node * tmpTail;
 		List * tmpList = htable->table[hash];
@@ -274,16 +259,12 @@ void * remove(void * threadid)
 			tmpTail = tmpList->tail;
 			if(tmpTail != NULL)
 			{
-				//cout << "Attempting to remove the tail " << tmpTail->key << "\n";
 				tmpList->tail = tmpTail->next;
 				tmpList->listLength--;
 				if(tmpTail->next == NULL)
 				{
-					//cout << "List is now empty\n";
 					tmpList->head = NULL;
-					//cout << "Head set to null\n";
 				}
-				//else cout << "New tail is " << tmpTail->next->key << "\n";
 			}
 			pthread_mutex_unlock(&tmpList->nodeLock);
 		}
@@ -291,18 +272,12 @@ void * remove(void * threadid)
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
 }
-//Generates a random number and then searches the table for it
-//Get hash;Get relevant list;search through list;
 void * contains(void * threadid)
 {
-//	int count = 0;
-//	while(count < 5)
 	while(true)
 	{
-//		count++;
 		int key = rand() % KEY_RANGE;
 		int hash = hashFunc(key, htable);
-//		cout << "Searching for value " << key << "\n";
 		List * tmpList = htable->table[hash];
 		Node * tmpTail;
 		iterations++;
@@ -315,21 +290,18 @@ void * contains(void * threadid)
 				if(tmpTail->key == key)
 				{
 					pSearches++;
-//					cout << "Positive Search on value " << key << "\n";
 					break;
 				}
 				tmpTail = tmpTail->next;
 			}
 			if(tmpTail == NULL)
 			{
-//				cout << "Negative Serch on value " << key << "\n";
 				nSearches++;
 			}
 			pthread_mutex_unlock(&tmpList->nodeLock);
 		}
 		else 
 		{
-//			cout << "Null List for value " << key << "\n";
 			pthread_mutex_lock(&listLock);
 			nSearches++;
 			pthread_mutex_unlock(&listLock);
@@ -341,27 +313,32 @@ void * contains(void * threadid)
 
 void * choose(void * threadid)
 {
-	int num = rand() % 10;
-	if(num >= 5)
+	int num = rand() % 128;
+	if(num >= 12)
 	{
+#if defined(COUNTS)
 		containsC++;
+#endif
 		contains(threadid);
 	}
 	else if(num >= 2)
 	{
+#if defined(COUNTS)
 		addC++;
+#endif
 		add(threadid);
 	}
 	else 
 	{
+#if defined(COUNTS)
 		removeC++;
+#endif
 		remove(threadid);
 	}
 }
 
 int main()
 {
-for(int k = 0; k < 20; k++){
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
 		srand(time(NULL));
 		gettimeofday(&start_time, NULL);
@@ -381,18 +358,15 @@ for(int k = 0; k < 20; k++){
 		//      printf("Total executing time %lld microseconds, %lld iterations/s  and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
 		iterations = 0;
 	}
-}
 #if defined(DEBUG)
 	printTable();
 #endif
-#if defined(SEARCH)
+#if defined(COUNTS)
 	printSearchResults();
+	printTCounts();
 #endif
 #if defined(RESIZE)
 	cout << "Final Size: " << htable->size << "\n";
-#endif
-#if defined(TCOUNT)
-	printTCounts();
 #endif
 	return 0;
 }

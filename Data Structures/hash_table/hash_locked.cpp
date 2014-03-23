@@ -11,9 +11,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include "xmmintrin.h"
-#define KEY_RANGE 128
+//#define KEY_RANGE 128
 //#define KEY_RANGE 131072
-//#define KEY_RANGE 134217728
+#define KEY_RANGE 134217728
 #define INIT_TABLE_SIZE 128
 //#define INIT_TABLE_SIZE 131072
 //#define INIT_TABLE_SIZE 134217728
@@ -22,10 +22,9 @@
 #define PAUSE 2
 #define MIN_DELAY 1
 #define MAX_DELAY 10
-#define TCOUNT//Tracks how many threads did which function
-//#define SEARCH//Prints out the number of +tive/-tive searches
+#define COUNTS//Prints out the number of +tive/-tive searches & the ratio of function calls
 //#define DEBUG//Print out the table at the end of the program
-//#define RESIZE//Defines the resizing functionality
+#define RESIZE//Defines the resizing functionality
 #define MAX_LIST_LENGTH 10//If a list's length is greater than this, the table resizes
 
 //Modes of Operation - If neither defined then defaults to assembly spinlock
@@ -79,9 +78,9 @@ struct Table{
 	}
 };
 Table * htable = new Table(INIT_TABLE_SIZE);
-int hashFunc(int item)
+int hashFunc(int item, Table * table)
 {
-	return item % htable->size;
+	return item % table->size;
 }
 
 #if defined(RESIZE)
@@ -146,27 +145,22 @@ void printTable()
 			currBucket = htable->table[i];
 			tmpTail = currBucket->tail;
 			tmpHead = currBucket->head;
-			cout << "List contained at index: " << i << " ";
 			while(tmpTail != NULL && tmpTail != tmpHead->next)
 			{
-				//cout << tmpTail->key << " , ";
 				count++;
 				tmpTail = tmpTail->next;
 			}
-
-			cout << " Number of items in list: " << count << "\n";
+			if(count > 0)cout << "List: " << i << " Number of items in list: " << count << "\n";
 			count = 0;
 		}
 	}
 	cout << "\n";
 }
-#if defined(SEARCH)
+#if defined(COUNTS)
 void printSearchResults()
 {
-	cout << "Positive Searches: " << pSearches << " Negative Searches: " << nSearches << "\n";
+	cout << "Total Searches: " << (pSearches+nSearches) << " Positive Searches: " << pSearches << " Negative Searches: " << nSearches << "\n";
 }
-#endif
-#if defined(TCOUNT)
 void printTCounts()
 {
 	cout << "Contains: " << containsC << " Adds: " << addC << " Removes: " << removeC << "\n";
@@ -174,11 +168,8 @@ void printTCounts()
 #endif
 void * add(void * threadid)
 {
-//	int count = 0;
-//	while(count < 5)
 	while(true)
 	{
-//count++;
 #if defined(LOCKED)
 		pthread_mutex_lock(&listLock);
 #elif defined(TTAS)
@@ -223,8 +214,7 @@ void * add(void * threadid)
 		while(myTicket != nowServing)_mm_pause();
 #endif
 		int key = rand() % KEY_RANGE;
-		int hash = hashFunc(key);
-//		cout << "Attempting to add " << key << " to index " << hash << "\n";
+		int hash = hashFunc(key, htable);
 		Node * newNode = new Node(key);
 		Node * tmpHead;
 		Node * tmpTail;
@@ -253,11 +243,7 @@ void * add(void * threadid)
 #if defined(RESIZE)
 		if(tmpList->listLength >= MAX_LIST_LENGTH)
 		{
-			//		cout << "Table before resize\n";
-			//		printTable();
 			htable = resize(htable->size);
-			//		cout << "Table after resize\n";
-			//		printTable();
 		}
 #endif
 #if defined(LOCKED)
@@ -276,11 +262,8 @@ void * add(void * threadid)
 
 void * remove(void * threadid)
 {
-	//int count = 0;
-	//while(count < 5)
 	while(true)
 	{
-//		count++;
 #if defined(LOCKED)
 		pthread_mutex_lock(&listLock);
 #elif defined(TTAS)
@@ -325,7 +308,7 @@ void * remove(void * threadid)
 		while(myTicket != nowServing)_mm_pause();
 #endif
 
-		int hash = hashFunc(rand() % KEY_RANGE);
+		int hash = hashFunc(rand() % KEY_RANGE, htable);
 		Node * tmpTail;
 		List * tmpList = htable->table[hash];
 		iterations++;
@@ -334,16 +317,12 @@ void * remove(void * threadid)
 			tmpTail = tmpList->tail;
 			if(tmpTail != NULL)
 			{
-				//cout << "Attempting to remove the tail " << tmpTail->key << "\n";
 				tmpList->tail = tmpTail->next;
 				tmpList->listLength--;
 				if(tmpTail->next == NULL)
 				{
-					//cout << "List is now empty\n";
 					tmpList->head = NULL;
-					//cout << "Head set to null\n";
 				}
-				//else cout << "New tail is " << tmpTail->next->key << "\n";
 			}
 		}
 #if defined(LOCKED)
@@ -359,20 +338,13 @@ void * remove(void * threadid)
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
 }
-//Generates a random number and then searches the table for it
-//Get hash;Get relevant list;search through list;
 void * contains(void * threadid)
 {
-//	int count = 0;
-//	while(count < 5)
 	while(true)
 	{
 		pthread_mutex_lock(&listLock);
-//		count++;
-	//	srand(time(NULL));
 		int key = rand() % KEY_RANGE;
-		int hash = hashFunc(key);
-//		cout << "Searching for value " << key << "\n";
+		int hash = hashFunc(key, htable);
 		List * tmpList = htable->table[hash];
 		Node * tmpTail;
 		iterations++;
@@ -384,20 +356,17 @@ void * contains(void * threadid)
 				if(tmpTail->key == key)
 				{
 					pSearches++;
-//					cout << "Positive Search on value " << key << "\n";
 					break;
 				}
 				tmpTail = tmpTail->next;
 			}
 			if(tmpTail == NULL)
 			{
-//				cout << "Negative Serch on value " << key << "\n";
 				nSearches++;
 			}
 		}
 		else 
 		{
-//			cout << "Null List for value " << key << "\n";
 			nSearches++;
 		}
 		pthread_mutex_unlock(&listLock);
@@ -408,20 +377,26 @@ void * contains(void * threadid)
 
 void * choose(void * threadid)
 {
-	int num = rand() % 10;
-	if(num >= 5)
+	int num = rand() % 128;
+	if(num >= 12)
 	{
+#if defined(COUNTS)
 		containsC++;
+#endif
 		contains(threadid);
 	}
 	else if(num >= 2)
 	{
+#if defined(COUNTS)
 		addC++;
+#endif
 		add(threadid);
 	}
 	else 
 	{
+#if defined(COUNTS)
 		removeC++;
+#endif
 		remove(threadid);
 	}
 }
@@ -450,14 +425,12 @@ int main()
 #if defined(DEBUG)
 	printTable();
 #endif
-#if defined(SEARCH)
+#if defined(COUNTS)
 	printSearchResults();
+	printTCounts();
 #endif
 #if defined(RESIZE)
 	cout << "Final Size: " << htable->size << "\n";
-#endif
-#if defined(TCOUNT)
-	printTCounts();
 #endif
 	return 0;
 }
