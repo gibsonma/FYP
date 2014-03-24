@@ -7,6 +7,12 @@ Gather data for both
 Look at C++ optimisations http://www.agner.org/optimize/#manuals
 Report
 
+-Try implement locked resize in lockless again
+if(...)
+lock resize
+unlock
+-Work on presentation slides
+
 
 
 Done this session:

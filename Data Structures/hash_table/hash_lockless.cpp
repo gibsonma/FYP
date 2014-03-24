@@ -8,16 +8,19 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include "xmmintrin.h"
 //#define KEY_RANGE 128
 //#define KEY_RANGE 131072
 #define KEY_RANGE 134217728
 //#define INIT_TABLE_SIZE 128
-//#define INIT_TABLE_SIZE 131072
-#define INIT_TABLE_SIZE 134217728
+#define INIT_TABLE_SIZE 131072
+//#define INIT_TABLE_SIZE 134217728
 #define MAX_THREAD_VAL 128
 #define EXECUTION_TIME 1
 #define DEBUG
 #define COUNTS
+#define RESIZE
+#define MAX_LIST_LENGTH 10
 using namespace std;
 pthread_mutex_t hLock = PTHREAD_MUTEX_INITIALIZER;
 struct timeval start_time, stop_time;
@@ -56,6 +59,58 @@ int hashFunc(int item, Table * table)
 {
 	return item % table->size;
 }
+
+#if defined(RESIZE)
+void List::add(int key)
+{
+	Node * newNode = new Node(key);
+	Node * tmpTail = tail.load();
+	Node * tmpHead = head.load();
+	if(tmpHead == NULL || tmpTail == NULL)
+	{
+		head.store(newNode);
+		tail.store(newNode);
+	}
+	else if(tmpHead == head.load())
+	{
+		tmpHead->next = newNode;
+		head.store(newNode);
+	}
+}
+//Creates a new table of twice the size of the current table. Transfers all the buckets
+//over to the new table before returning it
+Table * resize(int oldTableLength)
+{
+	if(oldTableLength != htable->size)
+	{
+		return htable;
+	}
+	int newLength = oldTableLength * 2;
+	Table * newTable = new Table(newLength);
+	Node * tmpTail;
+	Node * tmpHead;
+	int hash;
+	for(int i = 0; i < htable->size; i++)
+	{
+		if(htable->table[i] != NULL)
+		{
+			List * currList = htable->table[i];
+			tmpTail = currList->tail;
+			tmpHead = currList->head;
+			while(tmpTail != NULL && tmpTail != tmpHead->next)
+			{
+				hash = tmpTail->key % newLength;
+				if(newTable->table[hash] == NULL)newTable->table[hash] = new List();
+				newTable->table[hash]->add(tmpTail->key);
+				tmpTail = tmpTail->next;
+			}
+		}
+	}
+	return newTable;
+}
+
+#endif
+
 
 void printTable()
 {
@@ -130,6 +185,15 @@ void * add(void * threadid)
 				tmpList->listLength++;
 			}
 		}
+#if defined(RESIZE)
+		pthread_mutex_lock(&hLock);
+		if(tmpList->listLength >= MAX_LIST_LENGTH)
+		{
+			sleep(2);
+			htable = resize(htable->size);
+		}
+		pthread_mutex_unlock(&hLock);
+#endif
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
@@ -241,6 +305,9 @@ int main()
 	}
 #if defined(DEBUG)
 	printTable();
+#endif
+#if defined(RESIZE)
+	cout << "Final Size: " << htable->size;
 #endif
 #if defined(COUNTS)
 	printSearchResults();
