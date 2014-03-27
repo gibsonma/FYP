@@ -7,11 +7,9 @@ Gather data for both
 Look at C++ optimisations http://www.agner.org/optimize/#manuals
 Report
 
--Try implement locked resize in lockless again
-if(...)
-lock resize
-unlock
--Work on presentation slides
+Make sure resize is applied to lock per bucket yup
+Report
+-Work on presentation slides & send to gregg before meeting
 
 
 
