@@ -1,6 +1,6 @@
 /*
-  Locked hash table, instead of locking down the table while entering a critical section, each list contains
-  its own lock, meaning that multiple threads can act on the table at once
+   Locked hash table, instead of locking down the table while entering a critical section, each list contains
+   its own lock, meaning that multiple threads can act on the table at once
  */
 #include <atomic>
 #include <iostream>
@@ -10,9 +10,9 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include "xmmintrin.h"
-#define KEY_RANGE 128
+//#define KEY_RANGE 128
 //#define KEY_RANGE 131072
-//#define KEY_RANGE 134217728
+#define KEY_RANGE 134217728
 #define INIT_TABLE_SIZE 128
 //#define INIT_TABLE_SIZE 131072
 //#define INIT_TABLE_SIZE 134217728
@@ -23,11 +23,11 @@
 #define MAX_DELAY 10
 #define COUNTS
 //#define DEBUG//Print out the table at the end of the program
-//#define RESIZE//Defines the resizing functionality
+#define RESIZE//Defines the resizing functionality
 #define MAX_LIST_LENGTH 10//If a list's length is greater than this, the table resizes
 
 //Modes of Operation - If neither defined then defaults to assembly spinlock
-#define LOCKED //Uses simple mutex blocking
+//#define LOCKED //Uses simple mutex blocking
 //#define TTAS //Uses a spinlock implemented with C++ atomics
 //#define TTASNP
 //#define CASLOCK
@@ -38,18 +38,18 @@
 //#define TTAS_RELAX
 //#define CASLOCK_RELAX
 //#define TAS_RELAX
-//#define TICKET_RELAX
+#define TICKET_RELAX
 
 pthread_mutex_t listLock = PTHREAD_MUTEX_INITIALIZER;
 using namespace std;
 struct timeval start_time, stop_time;
 long long total_time = 0, tsart = 0, tstop = 0;
 volatile long long iterations = 0;
-volatile int CASlock = 0;
-std::atomic<int> lock (0);
-int notTaken  = 0, taken = 1;//For the CAS lock
-volatile long nowServing = 0;//For ticket lock
-std::atomic<long> ticket (0);//For ticket lock
+//volatile int CASlock = 0;
+std::atomic<int> global_lock (0);
+int listNotTaken  = 0, listTaken = 1;//For the CAS lock
+volatile long global_nowServing = 0;//For ticket lock
+std::atomic<long> global_ticket (0);//For ticket lock
 volatile long long pSearches = 0;//Tracks positive contains() calls
 volatile long long nSearches = 0;//Tracks negative contains() calls
 int containsC = 0, addC = 0, removeC = 0;
@@ -62,7 +62,14 @@ struct List{
 	Node * volatile head;
 	Node * volatile tail;
 	int listLength = 0;
+#if defined(LOCKED)
 	pthread_mutex_t nodeLock = PTHREAD_MUTEX_INITIALIZER;
+#elif defined(TICKET) || defined(TICKET_RELAX)
+	std::atomic<long> ticket = ATOMIC_VAR_INIT(0);
+	volatile long nowServing;
+#else
+	std::atomic<int> lock = ATOMIC_VAR_INIT(0);
+#endif
 	void add(int key);
 };
 struct Table{
@@ -112,51 +119,24 @@ Table * resize(int oldTableLength)
 	Table * newTable = new Table(newLength);//Allocate new table
 	Node * tmpTail;
 	Node * tmpHead;
-	Node * tmpNode;
-	Node * prevNode;
-	Node * specNode;
-	List * newList;
-	List * oldList;
-	int hash, altHash;
-	int prevHash;
-	int key;
-	for(int i = 0; i < newTable->size; i++)//For each new bucket
+	int hash;
+	for(int i = 0; i < htable->size; i++)
 	{
-		newTable->table[i] = new List();
-		newList = newTable->table[i];
-		cout << "New bucket: " << i << " Old Bucket: " << i%oldTableLength << "\n";
-		oldList = htable->table[i%oldTableLength];//Get corresponding old bucket
-		tmpTail = oldList->tail;
-		while(tmpTail != NULL)//Search old bucket for first item that hashes to new table
+		if(htable->table[i] != NULL)
 		{
-			key = tmpTail->key;
-			hash = hashFunc(key,newTable);
-			altHash = hashFunc(key, htable);
-			cout << "Node key: " << key << " Hash of newTable: " << hash << " Hash of old table: " << altHash << "\n";
-			if(hash == altHash)//If entry maps to new hash
+			List * currList = htable->table[i];
+			tmpTail = currList->tail;
+			tmpHead = currList->head;
+			while(tmpTail != NULL && tmpTail != tmpHead->next)
 			{
-				newList->tail = tmpTail;//Link new bucket to entry
-				cout << "New bucket linked to node: " << tmpTail->key << "\n";
-				break;
-			}
-			tmpTail = tmpTail->next;//Else check next entry in bucket
-		}
-		/*
-		if(newList->tail != NULL)
-		{
-			tmpTail = newList->tail;
-			prevNode = tmpTail;
-			prevHash = hashFunc(prevNode->key, newTable);
-			tmpTail = tmpTail->next;
-			hash = hashFunc(tmpTail->key, newTable);
-			if(prevHash != hash)
-			{
-				specNode = prevNode;
-				//TODO Break this up into functions and test it
+				hash = tmpTail->key % newLength;
+				if(newTable->table[hash] == NULL)newTable->table[hash] = new List();
+				newTable->table[hash]->add(tmpTail->key);
+				tmpTail = tmpTail->next;
 			}
 		}
-		*/
 	}
+
 	return newTable;
 }
 #endif
@@ -165,7 +145,7 @@ void printTable()
 	List * currBucket;
 	Node * tmpTail; 
 	Node * tmpHead;
-	int count = 0, highC = 0;
+	int count = 0;
 	for(int i = 0; i < htable->size; i++)
 	{
 		if(htable->table[i] != NULL)
@@ -177,11 +157,10 @@ void printTable()
 			{
 				//cout << tmpTail->key << " , ";
 				count++;
-				if(tmpTail->key > highC)highC = tmpTail->key;
 				tmpTail = tmpTail->next;
 			}
 
-			if(count > 0)cout << "List: " << i << " Number of items in list: " << count << " Highest key: " << highC << "\n";
+			if(count > 0)cout << "List: " << i << " Number of items in list: " << count << "\n";
 			count = 0;
 		}
 	}
@@ -207,38 +186,250 @@ void * add(void * threadid)
 		Node * tmpHead;
 		Node * tmpTail;
 		List * tmpList = htable->table[hash];
+		List * currList;
 		iterations++;
 		if(tmpList == NULL)//If index in table is empty
 		{
 			htable->table[hash] = new List();
 			tmpList = htable->table[hash];
+#if defined(LOCKED)			
 			pthread_mutex_lock(&tmpList->nodeLock);
+#elif defined(TTAS)
+			do{
+				while(tmpList->lock.load() == 1)sleep(PAUSE);
+			}while(tmpList->lock.exchange(1));
+#elif defined(TTASNP)
+			do{
+				while(tmpList->lock.load() == 1);
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(TTAS_RELAX)
+			do{
+				while(tmpList->lock.load() == 1)_mm_pause();
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(CASLOCK)
+			int delay = MIN_DELAY;
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				sleep(rand() % delay);
+				if(delay < MAX_DELAY)delay = 2 * delay;
+			}
+#elif defined(CASLOCK_RELAX)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				_mm_pause();
+			}
+#elif defined(CASLOCKND)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+			}
+#elif defined(TAS)
+			while(tmpList->lock.exchange(1));
+#elif defined(TASWP)
+			while(tmpList->lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+			while(tmpList->lock.exchange(1))_mm_pause();
+#elif defined(TICKET)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)sleep(myTicket - tmpList->nowServing);
+#elif defined(TICKET_RELAX)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)_mm_pause();
+
+#endif
 			tmpList->head = newNode;
 			tmpList->tail = newNode;
 			tmpList->listLength = 1;
+#if defined(LOCKED)			
 			pthread_mutex_unlock(&tmpList->nodeLock);
+#elif defined(TICKET) || defined(TICKET_RELAX)
+			tmpList->nowServing++;
+#else
+			tmpList->lock = 0;
+#endif
 		}
 		else if(tmpList->head == NULL || tmpList->tail == NULL)
 		{
+#if defined(LOCKED)			
 			pthread_mutex_lock(&tmpList->nodeLock);
+#elif defined(TTAS)
+			do{
+				while(tmpList->lock.load() == 1)sleep(PAUSE);
+			}while(tmpList->lock.exchange(1));
+#elif defined(TTASNP)
+			do{
+				while(tmpList->lock.load() == 1);
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(TTAS_RELAX)
+			do{
+				while(tmpList->lock.load() == 1)_mm_pause();
+			}while(tmpList->lock.exchange(1));
+#elif defined(CASLOCK)
+			int delay = MIN_DELAY;
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				sleep(rand() % delay);
+				if(delay < MAX_DELAY)delay = 2 * delay;
+			}
+#elif defined(CASLOCK_RELAX)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				_mm_pause();
+			}
+#elif defined(CASLOCKND)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+			}
+#elif defined(TAS)
+			while(tmpList->lock.exchange(1));
+#elif defined(TASWP)
+			while(tmpList->lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+			while(tmpList->lock.exchange(1))_mm_pause();
+#elif defined(TICKET)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)sleep(myTicket - tmpList->nowServing);
+#elif defined(TICKET_RELAX)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)_mm_pause();
+
+
+#endif			
 			tmpList->head = newNode;
 			tmpList->tail = newNode;
 			tmpList->listLength = 1;
+#if defined(LOCKED)			
 			pthread_mutex_unlock(&tmpList->nodeLock);
+#elif defined(TICKET) || defined(TICKET_RELAX)
+			tmpList->nowServing++;
+
+#else
+			tmpList->lock = 0;
+#endif
 		}
 		else 
 		{
+#if defined(LOCKED)			
 			pthread_mutex_lock(&tmpList->nodeLock);
+#elif defined(TTAS)
+			do{
+				while(tmpList->lock.load() == 1)sleep(PAUSE);
+			}while(tmpList->lock.exchange(1));
+#elif defined(TTASNP)
+			do{
+				while(tmpList->lock.load() == 1);
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(TTAS_RELAX)
+			do{
+				while(tmpList->lock.load() == 1)_mm_pause();
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(CASLOCK)
+			int delay = MIN_DELAY;
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				sleep(rand() % delay);
+				if(delay < MAX_DELAY)delay = 2 * delay;
+			}
+#elif defined(CASLOCK_RELAX)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				_mm_pause();
+			}
+#elif defined(CASLOCKND)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+			}
+#elif defined(TAS)
+			while(tmpList->lock.exchange(1));
+#elif defined(TASWP)
+			while(tmpList->lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+			while(tmpList->lock.exchange(1))_mm_pause();
+#elif defined(TICKET)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)sleep(myTicket - tmpList->nowServing);
+#elif defined(TICKET_RELAX)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)_mm_pause();
+
+
+#endif			
 			tmpList->head->next = newNode;
 			tmpList->head = newNode;
 			tmpList->listLength++;
+#if defined(LOCKED)			
 			pthread_mutex_unlock(&tmpList->nodeLock);
+#elif defined(TICKET) || defined(TICKET_RELAX)
+			tmpList->nowServing++;
+
+#else
+			tmpList->lock = 0;
+#endif
 		}
 #if defined(RESIZE)
+#if defined(LOCKED)		
+		pthread_mutex_lock(&listLock);
+#elif defined(TTAS)
+		do{
+			while(tmpList->lock.load() == 1)sleep(PAUSE);
+		}while(tmpList->lock.exchange(1));
+#elif defined(TTASNP)
+		do{
+			while(tmpList->lock.load() == 1);
+		}while(tmpList->lock.exchange(1));
+
+#elif defined(TTAS_RELAX)
+		do{
+			while(tmpList->lock.load() == 1)_mm_pause();
+		}while(tmpList->lock.exchange(1));
+
+#elif defined(CASLOCK)
+		int delay = MIN_DELAY;
+		while(true){
+			if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+			sleep(rand() % delay);
+			if(delay < MAX_DELAY)delay = 2 * delay;
+		}
+#elif defined(CASLOCK_RELAX)
+		while(true){
+			if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+			_mm_pause();
+		}
+#elif defined(CASLOCKND)
+		while(true){
+			if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+		}
+#elif defined(TAS)
+		while(tmpList->lock.exchange(1));
+#elif defined(TASWP)
+		while(tmpList->lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+		while(tmpList->lock.exchange(1))_mm_pause();
+#elif defined(TICKET)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)sleep(myTicket - tmpList->nowServing);
+#elif defined(TICKET_RELAX)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)_mm_pause();
+
+
+#endif		
 		if(tmpList->listLength >= MAX_LIST_LENGTH)
 		{
 			htable = resize(htable->size);
 		}
+#if defined(LOCKED)		
+		pthread_mutex_unlock(&listLock);
+#elif defined(TICKET) || defined(TICKET_RELAX)
+			tmpList->nowServing++;
+
+#else
+		tmpList->lock = 0;
+#endif
 #endif
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -255,7 +446,53 @@ void * remove(void * threadid)
 		iterations++;
 		if(tmpList != NULL)
 		{
+#if defined(LOCKED)			
 			pthread_mutex_lock(&tmpList->nodeLock);
+#elif defined(TTAS)
+			do{
+				while(tmpList->lock.load() == 1)sleep(PAUSE);
+			}while(tmpList->lock.exchange(1));
+#elif defined(TTASNP)
+			do{
+				while(tmpList->lock.load() == 1);
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(TTAS_RELAX)
+			do{
+				while(tmpList->lock.load() == 1)_mm_pause();
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(CASLOCK)
+			int delay = MIN_DELAY;
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				sleep(rand() % delay);
+				if(delay < MAX_DELAY)delay = 2 * delay;
+			}
+#elif defined(CASLOCK_RELAX)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				_mm_pause();
+			}
+#elif defined(CASLOCKND)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+			}
+#elif defined(TAS)
+			while(tmpList->lock.exchange(1));
+#elif defined(TASWP)
+			while(tmpList->lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+			while(tmpList->lock.exchange(1))_mm_pause();
+#elif defined(TICKET)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)sleep(myTicket - tmpList->nowServing);
+#elif defined(TICKET_RELAX)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)_mm_pause();
+
+
+#endif			
 			tmpTail = tmpList->tail;
 			if(tmpTail != NULL)
 			{
@@ -266,7 +503,14 @@ void * remove(void * threadid)
 					tmpList->head = NULL;
 				}
 			}
+#if defined(LOCKED)			
 			pthread_mutex_unlock(&tmpList->nodeLock);
+#elif defined(TICKET) || defined(TICKET_RELAX)
+			tmpList->nowServing++;
+
+#else
+			tmpList->lock = 0;
+#endif
 		}
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -283,7 +527,53 @@ void * contains(void * threadid)
 		iterations++;
 		if(tmpList)
 		{
+#if defined(LOCKED)			
 			pthread_mutex_lock(&tmpList->nodeLock);
+#elif defined(TTAS)
+			do{
+				while(tmpList->lock.load() == 1)sleep(PAUSE);
+			}while(tmpList->lock.exchange(1));
+#elif defined(TTASNP)
+			do{
+				while(tmpList->lock.load() == 1);
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(TTAS_RELAX)
+			do{
+				while(tmpList->lock.load() == 1)_mm_pause();
+			}while(tmpList->lock.exchange(1));
+
+#elif defined(CASLOCK)
+			int delay = MIN_DELAY;
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				sleep(rand() % delay);
+				if(delay < MAX_DELAY)delay = 2 * delay;
+			}
+#elif defined(CASLOCK_RELAX)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				_mm_pause();
+			}
+#elif defined(CASLOCKND)
+			while(true){
+				if(tmpList->lock.compare_exchange_strong(listNotTaken, listTaken))break;
+			}
+#elif defined(TAS)
+			while(tmpList->lock.exchange(1));
+#elif defined(TASWP)
+			while(tmpList->lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+			while(tmpList->lock.exchange(1))_mm_pause();
+#elif defined(TICKET)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)sleep(myTicket - tmpList->nowServing);
+#elif defined(TICKET_RELAX)
+			int myTicket = tmpList->ticket.fetch_add(1);
+			while(myTicket != tmpList->nowServing)_mm_pause();
+
+
+#endif			
 			tmpTail = tmpList->tail;
 			while(tmpTail != NULL)
 			{
@@ -298,13 +588,73 @@ void * contains(void * threadid)
 			{
 				nSearches++;
 			}
+#if defined(LOCKED)			
 			pthread_mutex_unlock(&tmpList->nodeLock);
+#elif defined(TICKET) || defined(TICKET_RELAX)
+			tmpList->nowServing++;
+
+#else
+			tmpList->lock = 0;
+#endif
 		}
 		else 
 		{
+#if defined(LOCKED)			
 			pthread_mutex_lock(&listLock);
+#elif defined(TTAS)
+			do{
+				while(global_lock.load() == 1)sleep(PAUSE);
+			}while(global_lock.exchange(1));
+#elif defined(TTASNP)
+			do{
+				while(global_lock.load() == 1);
+			}while(global_lock.exchange(1));
+
+#elif defined(TTAS_RELAX)
+			do{
+				while(global_lock.load() == 1)_mm_pause();
+			}while(global_lock.exchange(1));
+
+#elif defined(CASLOCK)
+			int delay = MIN_DELAY;
+			while(true){
+				if(global_lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				sleep(rand() % delay);
+				if(delay < MAX_DELAY)delay = 2 * delay;
+			}
+#elif defined(CASLOCK_RELAX)
+			while(true){
+				if(global_lock.compare_exchange_strong(listNotTaken, listTaken))break;
+				_mm_pause();
+			}
+#elif defined(CASLOCKND)
+			while(true){
+				if(global_lock.compare_exchange_strong(listNotTaken, listTaken))break;
+			}
+#elif defined(TAS)
+			while(global_lock.exchange(1));
+#elif defined(TASWP)
+			while(global_lock.exchange(1))sleep(PAUSE);
+#elif defined(TAS_RELAX)
+			while(global_lock.exchange(1))_mm_pause();
+#elif defined(TICKET)
+			int myTicket = global_ticket.fetch_add(1);
+			while(myTicket != global_nowServing)sleep(myTicket - global_nowServing);
+#elif defined(TICKET_RELAX)
+			int myTicket = global_ticket.fetch_add(1);
+			while(myTicket != global_nowServing)_mm_pause();
+
+
+#endif			
 			nSearches++;
+#if defined(LOCKED)			
 			pthread_mutex_unlock(&listLock);
+#elif defined(TICKET) || defined(TICKET_RELAX)
+			global_nowServing++;
+
+#else
+			global_lock = 0;
+#endif		
 		}
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;

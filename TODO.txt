@@ -1,15 +1,10 @@
 Change graph names
-Implement a lock per bucket for the locked hash table DONE
-Implement a resize function for the lockless table TRIED
-Add in a contains function for both DONE
-Make 1st draft of presentation slides - See notes for slide details
 Gather data for both
 Look at C++ optimisations http://www.agner.org/optimize/#manuals
 Report
 
-Make sure resize is applied to lock per bucket yup
-Report
--Work on presentation slides & send to gregg before meeting
+
+
 
 
 
