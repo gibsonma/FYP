@@ -377,7 +377,9 @@ void * contains(void * threadid)
 
 void * choose(void * threadid)
 {
+	srand(time(NULL));
 	int num = rand() % 128;
+//	cout << num << "\n";
 	if(num >= 12)
 	{
 #if defined(COUNTS)
@@ -404,7 +406,7 @@ void * choose(void * threadid)
 int main()
 {
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
-		srand(time(NULL));
+//		srand(time(NULL));
 		gettimeofday(&start_time, NULL);
 		int rc, t;
 		pthread_t threads[i];
@@ -418,7 +420,7 @@ int main()
 		}
 		gettimeofday(&stop_time, NULL);
 		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-		printf("%lld ,\n",iterations/EXECUTION_TIME);
+		printf("%lld \n",iterations/EXECUTION_TIME);
 		//      printf("Total executing time %lld microseconds, %lld iterations/s  and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
 		iterations = 0;
 	}

@@ -1,7 +1,5 @@
-Change graph names
-Gather data for both
-Look at C++ optimisations http://www.agner.org/optimize/#manuals
 Report
+Finishing up ring buffer, need to split up linked list into three variations
 
 
 

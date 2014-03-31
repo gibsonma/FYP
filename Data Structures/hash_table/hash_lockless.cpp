@@ -12,14 +12,14 @@
 //#define KEY_RANGE 128
 //#define KEY_RANGE 131072
 #define KEY_RANGE 134217728
-//#define INIT_TABLE_SIZE 128
-#define INIT_TABLE_SIZE 131072
+#define INIT_TABLE_SIZE 128
+//#define INIT_TABLE_SIZE 131072
 //#define INIT_TABLE_SIZE 134217728
 #define MAX_THREAD_VAL 128
 #define EXECUTION_TIME 1
 #define DEBUG
 #define COUNTS
-#define RESIZE
+//#define RESIZE
 #define MAX_LIST_LENGTH 10
 using namespace std;
 pthread_mutex_t hLock = PTHREAD_MUTEX_INITIALIZER;
@@ -259,6 +259,7 @@ void * contains(void * threadid)
 }
 void * choose(void * threadid)
 {
+	srand(time(NULL));
 	int num = rand() % 128;
 	if(num >= 12)
 	{
@@ -307,7 +308,7 @@ int main()
 	printTable();
 #endif
 #if defined(RESIZE)
-	cout << "Final Size: " << htable->size;
+	cout << "Final Size: " << htable->size << "\n";
 #endif
 #if defined(COUNTS)
 	printSearchResults();
