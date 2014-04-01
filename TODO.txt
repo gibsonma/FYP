@@ -1,5 +1,5 @@
 Report
-Finishing up ring buffer, need to split up linked list into three variations
+Next up Double linked list
 
 
 
