@@ -21,9 +21,9 @@
 #define PAUSE 2
 #define MIN_DELAY 1
 #define MAX_DELAY 10
-#define COUNTS
+//#define COUNTS
 //#define DEBUG//Print out the table at the end of the program
-#define RESIZE//Defines the resizing functionality
+//#define RESIZE//Defines the resizing functionality
 #define MAX_LIST_LENGTH 10//If a list's length is greater than this, the table resizes
 
 //Modes of Operation - If neither defined then defaults to assembly spinlock
@@ -38,7 +38,7 @@
 //#define TTAS_RELAX
 //#define CASLOCK_RELAX
 //#define TAS_RELAX
-#define TICKET_RELAX
+//#define TICKET_RELAX
 
 pthread_mutex_t listLock = PTHREAD_MUTEX_INITIALIZER;
 using namespace std;
@@ -704,7 +704,7 @@ int main()
 		}
 		gettimeofday(&stop_time, NULL);
 		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-		printf("%lld ,\n",iterations/EXECUTION_TIME);
+		printf("%lld ,",iterations/EXECUTION_TIME);
 		//      printf("Total executing time %lld microseconds, %lld iterations/s  and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
 		iterations = 0;
 	}

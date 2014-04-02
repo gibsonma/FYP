@@ -1,5 +1,6 @@
-Report
-Next up Double linked list
+Report - Singly Linked list lockless section
+Data - Lock per bucket - finish stoker
+Demo - Finish off slides & Rehearse
 
 
 
