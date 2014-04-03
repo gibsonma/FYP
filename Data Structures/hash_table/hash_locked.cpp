@@ -28,7 +28,7 @@
 #define MAX_LIST_LENGTH 10//If a list's length is greater than this, the table resizes
 
 //Modes of Operation - If neither defined then defaults to assembly spinlock
-#define LOCKED //Uses simple mutex blocking
+//#define LOCKED //Uses simple mutex blocking
 //#define TTAS //Uses a spinlock implemented with C++ atomics
 //#define TTASNP
 //#define CASLOCK
@@ -39,7 +39,7 @@
 //#define TTAS_RELAX
 //#define CASLOCK_RELAX
 //#define TAS_RELAX
-//#define TICKET_RELAX
+#define TICKET_RELAX
 
 pthread_mutex_t listLock = PTHREAD_MUTEX_INITIALIZER;
 using namespace std;
@@ -374,10 +374,12 @@ void * contains(void * threadid)
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
 }
+int count = 0;
+int rands[256];
 
 void * choose(void * threadid)
 {
-	int num = rand() % 128;
+	int num = rands[count++];
 	if(num >= 12)
 	{
 #if defined(COUNTS)
@@ -400,7 +402,6 @@ void * choose(void * threadid)
 		remove(threadid);
 	}
 }
-
 int main()
 {
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
@@ -408,6 +409,7 @@ int main()
 		gettimeofday(&start_time, NULL);
 		int rc, t;
 		pthread_t threads[i];
+		for(int j = 0; j < 256; j++)rands[j] = rand() % 128;
 		for(t = 0; t < i; t++)
 		{
 			rc = pthread_create(&threads[t], NULL, choose, (void *)t);
