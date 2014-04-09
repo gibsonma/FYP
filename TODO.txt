@@ -1,9 +1,6 @@
-Report - Doubly Linked list lockless section
-Data 	- 	All data collected for no resize
-		-	Change all lockless implementations to be within a while loop
-		-	Write scripts to compile & run variations using -D, -O3 and echo to record which mode it is
-		- 	Change code to get the median to get better results
-
+Report 	- 	Single Linked Buffer
+Data 	- 	Singly Linked List Local
+Poster	-	Finish poster & slides
 
 
 
