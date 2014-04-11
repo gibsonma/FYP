@@ -14,16 +14,18 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <unistd.h>
-#define KEY_RANGE 128
-//#define KEY_RANGE 131072
+#include "median.h"
+//#define KEY_RANGE 128
+#define KEY_RANGE 131072
 //#define KEY_RANGE 134217728
 #define MAX_THREAD_VAL 128
 #define EXECUTION_TIME 1
-#define DEBUG
+//#define DEBUG
 using namespace std;
 struct timeval start_time, stop_time;
 long long total_time = 0, tsart = 0, tstop = 0;
 std::atomic<int> iterations = ATOMIC_VAR_INIT(0);
+long long results[8];
 struct Node{
 
 	int key;
@@ -59,20 +61,28 @@ void * add(void * threadid)
 		if(tmpHead == NULL || tmpTail == NULL)//If list is empty
 		{
 			//cout << "Linked list is empty\n";
-			if(std::atomic_compare_exchange_weak(&head, &tmpHead, newNode) && std::atomic_compare_exchange_weak(&tail, &tmpTail, newNode))
-			{
-				//cout << "List head added and tail added\n";
-				//printList();
-			}
+			//while(true)
+			//{
+				if(std::atomic_compare_exchange_weak(&head, &tmpHead, newNode) && std::atomic_compare_exchange_weak(&tail, &tmpTail, newNode))
+				{
+			//		break;
+					//cout << "List head added and tail added\n";
+					//printList();
+				}
+			//}
 		}
 		else
 		{
-			if(std::atomic_compare_exchange_weak(&head, &tmpHead, newNode))
-			{
-				tmpHead->next = newNode;
-				//cout << "New node added successfully\n";
-				//printList();
-			}
+			//while(true)
+			//{
+				if(std::atomic_compare_exchange_weak(&head, &tmpHead, newNode))
+				{
+					tmpHead->next = newNode;
+			//		break;
+					//cout << "New node added successfully\n";
+					//printList();
+				}
+			//}
 		}
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -89,18 +99,22 @@ void * remove(void * threadid)
 		if(tmpTail != NULL)
 		{
 			//cout << "Attempting to remove the tail " << tmpTail->key << "\n";
-			if(std::atomic_compare_exchange_weak(&tail, &tmpTail, tmpTail->next))
-			{
-				if(tmpTail->next == NULL)//If tail is now null then head must also be set 
-				{			 //to null
-					//cout << "List now empty\n";
-					tmpHead = head.load();
-					while(!std::atomic_compare_exchange_weak(&head, &tmpHead, tmpTail->next));
-					//cout << "Head set to null\n";
+			//while(true)
+			//{
+				if(std::atomic_compare_exchange_weak(&tail, &tmpTail, tmpTail->next))
+				{
+					if(tmpTail->next == NULL)//If tail is now null then head must also be set 
+					{			 //to null
+						//cout << "List now empty\n";
+						tmpHead = head.load();
+						while(!std::atomic_compare_exchange_weak(&head, &tmpHead, tmpTail->next));
+						//cout << "Head set to null\n";
+					}
+			//		break;
+					//else cout << "New tail is " << tmpTail->next->key << "\n";
+					//printList();
 				}
-				//else cout << "New tail is " << tmpTail->next->key << "\n";
-				//printList();
-			}
+			//}
 		}
 		gettimeofday(&stop_time, NULL);
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
@@ -110,6 +124,8 @@ void * remove(void * threadid)
 int main()
 {
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
+		for(int j = 0; j < 7; j++)
+		{
 		srand(time(NULL));
 		gettimeofday(&start_time, NULL);
 		int rc, t;
@@ -125,10 +141,13 @@ int main()
 		}
 		gettimeofday(&stop_time, NULL);
 		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-		printf("%lld ,",iterations/EXECUTION_TIME);
-		//      printf("Total executing time %lld microseconds, %lld iterations/s  and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
+		//printf("%lld ,",iterations/EXECUTION_TIME);
+		results[j] = iterations/EXECUTION_TIME;
 		iterations = 0;
+		}
+		getMedian(results, 8);
 	}
+	cout << "\n";
 #if defined(DEBUG)
 	printList();
 #endif

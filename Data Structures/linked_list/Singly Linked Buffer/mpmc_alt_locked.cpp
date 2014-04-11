@@ -10,6 +10,7 @@
 #include <atomic>
 #include <unistd.h>
 #include "xmmintrin.h"
+#include "median.h"
 #define NUM_THREADS 1
 #define MAX_THREAD_VAL 128
 #define KEY_RANGE 128
@@ -17,7 +18,7 @@
 #define PAUSE 2
 #define MIN_DELAY 1
 #define MAX_DELAY 10
-#define DEBUG
+//#define DEBUG
 //Modes of Operation - If neither defined then defaults to assembly spinlock
 //#define LOCKED //Uses simple mutex blocking
 //#define TTAS //Uses a spinlock implemented with C++ atomics
@@ -30,7 +31,7 @@
 //#define TTAS_RELAX
 //#define CASLOCK_RELAX
 //#define TAS_RELAX
-#define TICKET_RELAX
+//#define TICKET_RELAX
 
 pthread_mutex_t listLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -44,6 +45,7 @@ std::atomic<int> lock (0);
 int notTaken  = 0, taken = 1;//For the CAS lock
 volatile long nowServing = 0;//For ticket lock
 std::atomic<long> ticket (0);//For ticket lock
+long long results[8];
 void printList();
 struct Node{
 
@@ -226,25 +228,30 @@ void printList()
 int main()
 {
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
-		srand(time(NULL));
-		gettimeofday(&start_time, NULL);
-		int rc, t;
-		pthread_t threads[i];
-		for(t = 0; t < i; t++)
+		for(int j = 0; j < 7; j++)
 		{
-			if(t % 2 == 0)rc = pthread_create(&threads[t], NULL, add, (void *)t);
-			else rc = pthread_create(&threads[t], NULL, remove, (void *)t);
+			srand(time(NULL));
+			gettimeofday(&start_time, NULL);
+			int rc, t;
+			pthread_t threads[i];
+			for(t = 0; t < i; t++)
+			{
+				if(t % 2 == 0)rc = pthread_create(&threads[t], NULL, add, (void *)t);
+				else rc = pthread_create(&threads[t], NULL, remove, (void *)t);
+			}
+			for(t = 0; t < i; t++)
+			{
+				pthread_join(threads[t], NULL);
+			}
+			gettimeofday(&stop_time, NULL);
+			total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
+			//printf("%lld \n",iterations/EXECUTION_TIME);
+			results[j] = iterations/EXECUTION_TIME;
+			iterations = 0;
 		}
-		for(t = 0; t < i; t++)
-		{
-			pthread_join(threads[t], NULL);
-		}
-		gettimeofday(&stop_time, NULL);
-		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-		printf("%lld ,",iterations/EXECUTION_TIME);
-		//      printf("Total executing time %lld microseconds with %lld iterations per second and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
-		iterations = 0;
+		getMedian(results, 8);
 	}
+	cout << "\n";
 #if defined(DEBUG)
 	printList();
 #endif

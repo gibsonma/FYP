@@ -1,6 +1,8 @@
-Report 	- 	Single Linked Buffer
-Data 	- 	Singly Linked List Local
-Poster	-	Finish poster & slides
+Report 	- 	Describe the different implementations in the literature and why you 
+			picked your one.
+			Rewrite in present tense unless necessary
+			Add in diagrams
+Data 	- 	
 
 
 

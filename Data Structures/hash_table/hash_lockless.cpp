@@ -9,18 +9,18 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include "xmmintrin.h"
-#include <time.h>
-//#define KEY_RANGE 128
+#include "median.h"
+#define KEY_RANGE 128
 //#define KEY_RANGE 131072
-#define KEY_RANGE 134217728
+//#define KEY_RANGE 134217728
 #define INIT_TABLE_SIZE 128
 //#define INIT_TABLE_SIZE 131072
 //#define INIT_TABLE_SIZE 134217728
 #define MAX_THREAD_VAL 128
 #define EXECUTION_TIME 1
 //#define DEBUG
-#define COUNTS
-#define RESIZE
+//#define COUNTS
+//#define RESIZE
 #define MAX_LIST_LENGTH 10
 using namespace std;
 pthread_mutex_t hLock = PTHREAD_MUTEX_INITIALIZER;
@@ -32,6 +32,7 @@ std::atomic<int> nSearches = ATOMIC_VAR_INIT(0);
 std::atomic<int> containsC = ATOMIC_VAR_INIT(0);
 std::atomic<int> addC = ATOMIC_VAR_INIT(0);
 std::atomic<int> removeC = ATOMIC_VAR_INIT(0);
+long long results[8];
 struct Node{
 	int key;
 	Node * next;
@@ -164,26 +165,35 @@ void * add(void * threadid)
 			tmpList = htable->table[hash];
 			tmpHead = tmpList->head.load();
 			tmpTail = tmpList->tail.load();
-			if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode) && std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, newNode))
-			{
-				tmpList->listLength = 1;
+			while(true){
+				if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode) && std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, newNode))
+				{
+					tmpList->listLength = 1;
+					break;
+				}
 			}
 		}
 		tmpHead = tmpList->head.load();
 		tmpTail = tmpList->tail.load();
 		if((tmpHead == NULL || tmpTail == NULL) && tmpList == htable->table[hash])
 		{
-			if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode) && std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, newNode))
-			{
-				tmpList->listLength = 1;
+			while(true){
+				if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode) && std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, newNode))
+				{
+					tmpList->listLength = 1;
+					break;
+				}
 			}
 		}
 		else if(tmpList == htable->table[hash] && tmpHead == tmpList->head.load()) 
 		{
-			if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode))
-			{
-				tmpHead->next = newNode;
-				tmpList->listLength++;
+			while(true){
+				if(std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, newNode))
+				{
+					tmpHead->next = newNode;
+					tmpList->listLength++;
+					break;
+				}
 			}
 		}
 #if defined(RESIZE)
@@ -213,15 +223,18 @@ void * remove(void * threadid)
 			tmpTail = tmpList->tail.load();
 			if(tmpTail != NULL && tmpList == htable->table[hash])
 			{
-				if(std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, tmpTail->next))
-				{
-					if(tmpTail->next == NULL)
+				while(true){
+					if(std::atomic_compare_exchange_weak(&tmpList->tail, &tmpTail, tmpTail->next))
 					{
-						tmpList->listLength = 0;
-						Node * tmpHead = tmpList->head.load();
-						while(!std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, tmpTail->next));
+						if(tmpTail->next == NULL)
+						{
+							tmpList->listLength = 0;
+							Node * tmpHead = tmpList->head.load();
+							while(!std::atomic_compare_exchange_weak(&tmpList->head, &tmpHead, tmpTail->next));
+						}
+						tmpList->listLength--;
+						break;
 					}
-					tmpList->listLength--;
 				}
 			}
 		}
@@ -260,7 +273,6 @@ void * contains(void * threadid)
 }
 void * choose(void * threadid)
 {
-	srand(time(NULL));
 	int num = rand() % 128;
 	if(num >= 12)
 	{
@@ -284,26 +296,33 @@ void * choose(void * threadid)
 		remove(threadid);
 	}
 }
+
 int main()
 {
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
-		gettimeofday(&start_time, NULL);
-		int rc, t;
-		pthread_t threads[i];
-		for(t = 0; t < i; t++)
-		{
-			rc = pthread_create(&threads[t], NULL, choose, (void *)t);
+		for(int j = 0; j < 7; j++){	
+			srand(time(NULL));
+			gettimeofday(&start_time, NULL);
+			int rc, t;
+			pthread_t threads[i];
+			for(t = 0; t < i; t++)
+			{
+				rc = pthread_create(&threads[t], NULL, choose, (void *)t);
+			}
+			for(t = 0; t < i; t++)
+			{
+				pthread_join(threads[t], NULL);
+			}
+			gettimeofday(&stop_time, NULL);
+			total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
+			//printf("%lld \n",iterations/EXECUTION_TIME);
+			//			cout << iterations/EXECUTION_TIME << "\n"; 
+			results[j] = iterations/EXECUTION_TIME;		
+			iterations = 0;
 		}
-		for(t = 0; t < i; t++)
-		{
-			pthread_join(threads[t], NULL);
-		}
-		gettimeofday(&stop_time, NULL);
-		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-		printf("%lld \n",iterations/EXECUTION_TIME);
-		//      printf("Total executing time %lld microseconds, %lld iterations/s  and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
-		iterations = 0;
+		getMedian(results, 8);
 	}
+	cout << "\n";
 #if defined(DEBUG)
 	printTable();
 #endif

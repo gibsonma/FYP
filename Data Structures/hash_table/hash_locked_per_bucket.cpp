@@ -10,9 +10,10 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include "xmmintrin.h"
-//#define KEY_RANGE 128
+#include "median.h"
+#define KEY_RANGE 128
 //#define KEY_RANGE 131072
-#define KEY_RANGE 134217728
+//#define KEY_RANGE 134217728
 #define INIT_TABLE_SIZE 128
 //#define INIT_TABLE_SIZE 131072
 //#define INIT_TABLE_SIZE 134217728
@@ -38,7 +39,7 @@
 //#define TTAS_RELAX
 //#define CASLOCK_RELAX
 //#define TAS_RELAX
-#define TICKET_RELAX
+//#define TICKET_RELAX
 
 pthread_mutex_t listLock = PTHREAD_MUTEX_INITIALIZER;
 using namespace std;
@@ -53,6 +54,7 @@ std::atomic<long> global_ticket (0);//For ticket lock
 volatile long long pSearches = 0;//Tracks positive contains() calls
 volatile long long nSearches = 0;//Tracks negative contains() calls
 int containsC = 0, addC = 0, removeC = 0;
+long long results[8];
 struct Node{
 	int key;
 	Node * volatile next;
@@ -660,11 +662,10 @@ void * contains(void * threadid)
 		if(((stop_time.tv_sec + (stop_time.tv_usec/1000000.0)) -( start_time.tv_sec + (start_time.tv_usec/1000000.0))) > EXECUTION_TIME) break;
 	}
 }
-int count = 0;
-int rands[256];
+
 void * choose(void * threadid)
 {
-	int num = rands[count++];
+	int num = rand() % 128;
 	if(num >= 12)
 	{
 #if defined(COUNTS)
@@ -691,25 +692,31 @@ void * choose(void * threadid)
 int main()
 {
 	for(int i = 1; i <= MAX_THREAD_VAL; i = i * 2){
-		srand(time(NULL));
-		gettimeofday(&start_time, NULL);
-		int rc, t;
-		pthread_t threads[i];
-		for(int j = 0; j < 256; j++)rands[j] = rand() % 128;
-		for(t = 0; t < i; t++)
+		for(int j = 0; j < 7; j++)
 		{
-			rc = pthread_create(&threads[t], NULL, choose, (void *)t);
+			Table * htable = new Table(INIT_TABLE_SIZE);
+			srand(time(NULL));
+			gettimeofday(&start_time, NULL);
+			int rc, t;
+			pthread_t threads[i];
+			for(t = 0; t < i; t++)
+			{
+				rc = pthread_create(&threads[t], NULL, choose, (void *)t);
+			}
+			for(t = 0; t < i; t++)
+			{
+				pthread_join(threads[t], NULL);
+			}
+			delete htable;
+			gettimeofday(&stop_time, NULL);
+			total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
+		//	printf("%lld \n",iterations/EXECUTION_TIME);
+			results[j] = iterations/EXECUTION_TIME;
+			iterations = 0;
 		}
-		for(t = 0; t < i; t++)
-		{
-			pthread_join(threads[t], NULL);
-		}
-		gettimeofday(&stop_time, NULL);
-		total_time += (stop_time.tv_sec - start_time.tv_sec) * 1000000L + (stop_time.tv_usec - start_time.tv_usec);
-		printf("%lld ,",iterations/EXECUTION_TIME);
-		//      printf("Total executing time %lld microseconds, %lld iterations/s  and %d threads\n", total_time, iterations/EXECUTION_TIME, i);
-		iterations = 0;
+		getMedian(results, 8);
 	}
+	cout << "\n";
 #if defined(DEBUG)
 	printTable();
 #endif

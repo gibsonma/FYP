@@ -1,0 +1,39 @@
+#!/bin/bash
+#Bucket lock Hash Table Script
+echo 'Locked Variations'
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D LOCKED
+echo -e "\nLOCKED"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D TTAS
+echo -e "\nTTAS"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D TTASNP
+echo -e "\nTTASNP"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D TTAS_RELAX
+echo -e "\nTTAS_RELAX"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D TAS
+echo -e "\nTASNP"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D TASWP
+echo -e "\nTASWP"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D TAS_RELAX
+echo -e "\nTAS_RELAX"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D TICKET
+echo -e "\nTICKET"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D TICKET_RELAX
+echo -e "\nTICKET_RELAX"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D CASLOCK
+echo -e "\nCASLOCK"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D CASLOCKND
+echo -e "\nCASLOCKND"
+./a.exe
+g++ -O3 hash_locked_per_bucket.cpp -pthread -std=c++0x -w -D CASLOCK_RELAX
+echo -e "\nCASLOCK_RELAX"
+./a.exe

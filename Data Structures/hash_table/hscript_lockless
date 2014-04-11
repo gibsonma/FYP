@@ -1,0 +1,5 @@
+#!/bin/bash
+#Lockless Hash Table
+echo 'Lockless'
+g++ -O3 hash_lockless.cpp -pthread -std=c++0x
+./a.exe
