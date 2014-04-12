@@ -1,7 +1,6 @@
-Report 	- 	Describe the different implementations in the literature and why you 
-			picked your one.
-			Rewrite in present tense unless necessary
+Report 	- 	Rewrite in present tense unless necessary
 			Add in diagrams
+			Do further evaluation of data structures
 Data 	- 	
 
 
