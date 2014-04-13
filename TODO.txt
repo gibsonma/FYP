@@ -4,32 +4,13 @@ Report 	- 	Rewrite in present tense unless necessary
 Data 	- 	
 
 
+Ring Buffer Results:
+
+	Best Locks - CAS TAS TTAS
+	TTAS better than variations
+	TAS better than variations
+	TICKET_RELAX better
+	Size can affect performance on some locks such as TAS but not others like locked or cas
+	SOme locks keep performance across architectures like TAS but not others like mutex
 
 
-
-Done this session:
-
-
-
-Group FYP
-
-Done this session:
-
-
-Normal		X
-Fire		X
-Water 		X
-Electric	X
-Grass		X
-Ice			X
-Fighting	X
-Poison		X
-Ground		X
-Flying		X
-Psychic
-Bug			X
-Rock		X
-Ghost
-Dragon
-
-Need Fighting, Water and ground
