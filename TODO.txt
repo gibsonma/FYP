@@ -1,6 +1,6 @@
 Report 	- 	Rewrite in present tense unless necessary
 			Add in diagrams
-			Evaluation of singly linked list
+			Evaluation of doubly linked list
 Data 	- 	
 
 
@@ -13,4 +13,9 @@ Ring Buffer Results:
 	Size can affect performance on some locks such as TAS but not others like locked or cas
 	SOme locks keep performance across architectures like TAS but not others like mutex
 
-
+Singly Linked List Results:
+	Best Locks - CAS, TAS, TTAS
+	Lockless good at low thread counts but falls off
+	TTAS best out of variations
+	Size impacts heavily due to time spent travsering list
+	Robustness across architectures dependant on implementation
