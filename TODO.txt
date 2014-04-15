@@ -1,6 +1,7 @@
 Report 	- 	Rewrite in present tense unless necessary
 			Add in diagrams
 			Evaluation of doubly linked list
+			Are graphs/tables labelled/referenced properly?
 Data 	- 	
 
 
@@ -19,3 +20,13 @@ Singly Linked List Results:
 	TTAS best out of variations
 	Size impacts heavily due to time spent travsering list
 	Robustness across architectures dependant on implementation
+	
+Doubly Linked Buffer Results:
+	Best Locks - CAS, TAS, TTAS
+	Lockless matches locks in performance until 4 then drops hard
+	TTAS best variation
+	TASWP best variation
+	CAS best variatiomn
+	TICKET_RELAX better
+	Size makes a difference to some, not all, especially lockless
+	Mutex performs similarly on different architectures, CAS and lockless do not
