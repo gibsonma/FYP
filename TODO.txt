@@ -1,6 +1,6 @@
 Report 	- 	Rewrite in present tense unless necessary
 			Add in diagrams
-			Evaluation of doubly linked list
+			Evaluation of Hash Table
 			Are graphs/tables labelled/referenced properly?
 Data 	- 	
 
@@ -30,3 +30,13 @@ Doubly Linked Buffer Results:
 	TICKET_RELAX better
 	Size makes a difference to some, not all, especially lockless
 	Mutex performs similarly on different architectures, CAS and lockless do not
+	
+Singly Linked Buffer Results
+	Best Locks - TTAS, TAS, CAS, locked
+	Lockless performs similarly to pthread mutex lock, outperformed by TTAS
+	TTAS best
+	TASWP best
+	CAS best
+	Ticket relax outperforms ticker early
+	None of the locks tested performed similarly on architectures
+	
