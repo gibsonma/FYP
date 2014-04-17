@@ -1,7 +1,8 @@
-Report 	- 	Rewrite in present tense unless necessary
+Report 	- 	Rewrite in present tense unless necessary - Up to Hash Table - Resizing
 			Add in diagrams
 			Evaluation of Hash Table
 			Are graphs/tables labelled/referenced properly?
+			Table of Figure / Tables
 Data 	- 	
 
 
