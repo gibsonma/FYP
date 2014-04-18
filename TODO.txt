@@ -1,9 +1,11 @@
-Report 	- 	Rewrite in present tense unless necessary - Up to Hash Table - Resizing
-			Add in diagrams
+Report 	- 	Add in diagrams
 			Evaluation of Hash Table
 			Are graphs/tables labelled/referenced properly?
-			Table of Figure / Tables
-Data 	- 	
+			Table of Figure / Tables?
+			Submit electronic copy
+			Printed Copies should be RING BOUND
+			Print Title page onto colour cover sheet and use same colour as back sheet
+
 
 
 Ring Buffer Results:
