@@ -1,7 +1,7 @@
-Report 	- 	Add in diagrams
-			Evaluation of Hash Table
+Report 	- 	Evaluation of Hash Table
 			Are graphs/tables labelled/referenced properly?
-			Table of Figure / Tables?
+			Do captions
+			Every evaluation should answer a question
 			Submit electronic copy
 			Printed Copies should be RING BOUND
 			Print Title page onto colour cover sheet and use same colour as back sheet
