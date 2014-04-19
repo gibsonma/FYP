@@ -54,9 +54,9 @@ Hash Table Results:
 	TASWP best
 	Architecture affects all locks tested
 	
-: Millions of iterations/second by number of threads for the doubly linked buffer on the machine Stoker. “128 Key Range” indicates that maximum number of nodes allowed in the list at any one time is 128. “CAS lock”, “TAS” and “TTAS” represent the compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations respectively.
+: Millions of iterations/second by number of threads for the singly linked buffer on the machine Stoker. “128 Key Range” indicates the largest key that can be generated for a node in the list at any one time, though this is not a hard cap on the number of nodes. “CAS lock”, “TAS” and “TTAS” represent the compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations respectively.
 
-: Hardware performance data gathered from the three doubly linked buffer locked implementations tested in figure 12. The compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations.
+: Hardware performance data gathered from the three singly linked buffer locked implementations tested in figure 12. The compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations.
 
 What is the best lock, why, what does this mean?
 	
