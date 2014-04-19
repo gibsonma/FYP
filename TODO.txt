@@ -2,6 +2,7 @@ Report 	- 	Evaluation of Hash Table
 			Are graphs/tables labelled/referenced properly?
 			Do captions
 			Every evaluation should answer a question
+			Replace if with whether if possible
 			Submit electronic copy
 			Printed Copies should be RING BOUND
 			Print Title page onto colour cover sheet and use same colour as back sheet
@@ -42,4 +43,20 @@ Singly Linked Buffer Results
 	CAS best
 	Ticket relax outperforms ticker early
 	None of the locks tested performed similarly on architectures
+	
+Hash Table Results:
+	Best Global Locks - CAS, TTAS, TASWP
+	Same for lock per bucket
+	Lockless good at thread count 2, falls sharply afterwards
+	Resize affects some locks more than others
+	Size of the table doesn't seem to do much
+	TTAS best for both variations, lock per bucket gets beaten by TASNP until 4 threads
+	TASWP best
+	Architecture affects all locks tested
+	
+: Millions of iterations/second by number of threads for the ring buffer on the machine Stoker. “128 Key Range” indicates that the maximum length of the ring buffer array is 128. “TTAS No Pause”, “TTAS” and “TTAS_RELAX” represent the test-and-test-and-set-no-pause, the test-and-test-and-set and the test-and-test-and-set-relax lock implementations respectively.
+
+: Hardware performance data gathered from the three ring buffer test-and-test-and-set implementations tested in figure 3. The test-and-test-and-set-no-pause, the test-and-test-and-set and the test-and-test-and-set-relax lock implementations.
+
+How robust are the ring buffer implementations across different architectures
 	
