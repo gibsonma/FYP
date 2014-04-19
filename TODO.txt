@@ -54,9 +54,9 @@ Hash Table Results:
 	TASWP best
 	Architecture affects all locks tested
 	
-: Millions of iterations/second by number of threads for the ring buffer on the machine Stoker. “128 Key Range” indicates that the maximum length of the ring buffer array is 128. “TTAS No Pause”, “TTAS” and “TTAS_RELAX” represent the test-and-test-and-set-no-pause, the test-and-test-and-set and the test-and-test-and-set-relax lock implementations respectively.
+:Millions of iterations/second by number of threads for the singly linked list on the machine Stoker. “128 Key Range” indicates that maximum number of nodes allowed in the list at any one time is 128. “CAS lock”, “TAS” and “TTAS” represent the compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations respectively.
 
-: Hardware performance data gathered from the three ring buffer test-and-test-and-set implementations tested in figure 3. The test-and-test-and-set-no-pause, the test-and-test-and-set and the test-and-test-and-set-relax lock implementations.
+: Hardware performance data gathered from the three ring buffer test-and-test-and-set implementations  : Hardware performance data gathered from the three singly linked list locked implementations tested in figure 12. The compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations.
 
-How robust are the ring buffer implementations across different architectures
+What are the best performing locks and why? What does this mean?
 	
