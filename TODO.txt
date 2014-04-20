@@ -1,4 +1,4 @@
-Report 	- 	Evaluation of Hash Table
+Report 	- 	Evaluation rejig
 			Are graphs/tables labelled/referenced properly?
 			Do captions
 			Every evaluation should answer a question
