@@ -1,7 +1,4 @@
-Report 	- 	Evaluation rejig
-			Are graphs/tables labelled/referenced properly?
-			Do captions
-			Every evaluation should answer a question
+Report 	- 	Do README for CD
 			Replace if with whether if possible
 			Submit electronic copy
 			Printed Copies should be RING BOUND
@@ -62,4 +59,8 @@ Hash Table Results:
 : Hardware performance data gathered from the three globally locked hash table implementations tested in figure 43. The compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations.
 
 How do they compare, which is better?
+
+Relate to questions asked in introduction and if they have been answered and what new questions have arisen
+The purpose of this project is to determine and compare the differences between concurrent data structure implementations and investigate if the performance of these implementations is maintained across different architectures.
+
 	
