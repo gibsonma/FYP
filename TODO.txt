@@ -7,8 +7,11 @@ Report 	- 	Evaluation rejig
 			Printed Copies should be RING BOUND
 			Print Title page onto colour cover sheet and use same colour as back sheet
 
-
-
+Would have liked to do further analysis on hash table
+Lockless works well at low thread counts but suffers from thread contention
+_mm_pause() sometimes had no performance benefits compared to not using a pause instruction
+sleep beats both in every case
+			
 Ring Buffer Results:
 
 	Best Locks - CAS TAS TTAS
@@ -54,9 +57,9 @@ Hash Table Results:
 	TASWP best
 	Architecture affects all locks tested
 	
-: Millions of iterations/second by number of threads for the singly linked buffer on the machine Stoker. “128 Key Range” indicates the largest key that can be generated for a node in the list at any one time, though this is not a hard cap on the number of nodes. “CAS lock”, “TAS” and “TTAS” represent the compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations respectively.
+: Millions of iterations/second by number of threads for the globally locked hash table on the machine Stoker. “Table Size 128” indicates the maximum number of buckets allowed in the hash table at any one time. “CAS lock”, “TAS” and “TTAS” represent the compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations respectively.
 
-: Hardware performance data gathered from the three singly linked buffer locked implementations tested in figure 12. The compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations.
+: Hardware performance data gathered from the three globally locked hash table implementations tested in figure 43. The compare-and-swap, the test-and-set and the test-and-test-and-set lock implementations.
 
-What is the best lock, why, what does this mean?
+How do they compare, which is better?
 	
